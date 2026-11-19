@@ -11,6 +11,15 @@ export default defineConfig({
   root: 'src/renderer',
   base: './',
   resolve: {
+    // 渲染层必须只有一份 React，否则 Zustand 读到的 dispatcher 为空，页面直接白/黑屏
+    dedupe: [
+      'react',
+      'react-dom',
+      'react/jsx-runtime',
+      'react-router',
+      'react-router-dom',
+      '@remix-run/router'
+    ],
     alias: {
       '@renderer': resolve('src/renderer/src'),
       '@shared': resolve('src/shared')

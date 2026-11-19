@@ -17,6 +17,8 @@ import type {
   LaunchOutcome,
   LoaderVersion,
   ModEntry,
+  ModInstallProgress,
+  ModSearchHit,
   ModUpdate,
   NetplayProviderId,
   NetplayRuntime,
@@ -208,6 +210,10 @@ export interface FerryApi {
   importContent(id: string, kind: ContentKind): Promise<ModImportOutcome>
   checkModUpdates(id: string): Promise<ModUpdate[]>
   upgradeMod(id: string, key: string, url: string, fileName: string): Promise<ContentItem[]>
+  searchMods(id: string, query: string, limit?: number): Promise<ModSearchHit[]>
+  downloadMod(id: string, projectId: string): Promise<ContentItem[]>
+  cancelModDownload(): Promise<void>
+  onModInstallProgress(listener: (progress: ModInstallProgress) => void): () => void
 
   /* ---- 账户 ---- */
   accounts: {

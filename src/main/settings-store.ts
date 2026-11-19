@@ -87,7 +87,8 @@ class SettingsStore {
       locale: LOCALES.includes(raw.locale as Locale) ? (raw.locale as Locale) : DEFAULT_SETTINGS.locale,
       lastAccountId: typeof raw.lastAccountId === 'string' ? raw.lastAccountId : null,
       onboardingDone: raw.onboardingDone === true,
-      defaultJavaPath: typeof raw.defaultJavaPath === 'string' && raw.defaultJavaPath ? raw.defaultJavaPath : null
+      defaultJavaPath: typeof raw.defaultJavaPath === 'string' && raw.defaultJavaPath ? raw.defaultJavaPath : null,
+      curseforgeApiKey: typeof raw.curseforgeApiKey === 'string' && raw.curseforgeApiKey ? raw.curseforgeApiKey : null
     }
   }
 

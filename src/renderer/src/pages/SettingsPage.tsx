@@ -366,6 +366,16 @@ export function SettingsPage(): JSX.Element {
               ]}
             />
           </Row>
+          <Row label={t('settings.curseforgeKey')} hint={t('settings.curseforgeKeyHint')}>
+            <input
+              type="password"
+              key={settings.curseforgeApiKey ?? ''}
+              defaultValue={settings.curseforgeApiKey ?? ''}
+              onBlur={(event) => patch({ curseforgeApiKey: event.target.value.trim() || null })}
+              placeholder="x-api-key"
+              className="h-9 w-[260px] rounded-lg border border-[var(--hairline)] bg-[var(--hover-bg)] px-2.5 text-[12px] text-1 outline-none placeholder:text-3 focus:border-accent/50"
+            />
+          </Row>
           <Row label={t('settings.memory')}>
             <Slider
               value={settings.defaultMemoryMb}

@@ -5,6 +5,7 @@ import type {
   InstallProgress,
   LaunchEvent,
   LaunchLog,
+  ModInstallProgress,
   NetplayStatus,
   RoomCodeInfo
 } from '@shared/types'
@@ -42,6 +43,18 @@ export function createTauriFerry(): FerryApi {
     importContent: (id, kind) => invoke('content_import', { id, kind }),
     checkModUpdates: (id) => invoke('content_updates', { id }),
     upgradeMod: (id, key, url, fileName) => invoke('content_upgrade', { id, key, url, fileName }),
+    searchMods: (id, query, limit) => invoke('mod_search', { id, query, limit: limit ?? 20 }),
+    downloadMod: (id, projectId) => invoke('mod_download', { id, projectId }),
+    cancelModDownload: () => invoke('mod_download_cancel'),
+    onModInstallProgress: (listener: (progress: ModInstallProgress) => void) => {
+      let dispose: (() => void) | null = null
+      void listen<ModInstallProgress>('mod:install-progress', (event) => listener(event.payload)).then(
+        (unlisten) => {
+          dispose = unlisten
+        }
+      )
+      return () => dispose?.()
+    },
 
     // 兼容旧接口
     listMods: (id) => invoke('mods_list', { id }),

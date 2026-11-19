@@ -29,6 +29,22 @@ pub fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> 
     response.json::<T>().map_err(|e| e.to_string())
 }
 
+pub fn get_json_with_header<T: serde::de::DeserializeOwned>(
+    url: &str,
+    header: &str,
+    value: &str,
+) -> Result<T, String> {
+    let response = client()
+        .get(url)
+        .header(header, value)
+        .send()
+        .map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {} {}", response.status().as_u16(), url));
+    }
+    response.json::<T>().map_err(|e| e.to_string())
+}
+
 pub fn get_text(url: &str) -> Result<String, String> {
     let response = client().get(url).send().map_err(|e| e.to_string())?;
     if !response.status().is_success() {

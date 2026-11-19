@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { ContentItem, ContentKind, ContentPreview, Instance, ModUpdate } from '@shared/types'
 import { useAppStore } from '@renderer/store/app-store'
 import { Icon } from '../Icon'
+import { ModBrowser } from './ModBrowser'
 
 const KINDS: Array<{ id: ContentKind; key: 'content.tab.mods' | 'content.tab.resourcepacks' | 'content.tab.saves' | 'content.tab.logs' }> = [
   { id: 'mods', key: 'content.tab.mods' },
@@ -36,6 +37,7 @@ export function ContentPanel({ instance }: { instance: Instance }): JSX.Element 
   const [preview, setPreview] = useState<{ item: ContentItem; data: ContentPreview } | null>(null)
   const [updates, setUpdates] = useState<ModUpdate[]>([])
   const [checking, setChecking] = useState(false)
+  const [browserOpen, setBrowserOpen] = useState(false)
 
   const refresh = useCallback(
     async (target: ContentKind = kind): Promise<void> => {
@@ -52,6 +54,7 @@ export function ContentPanel({ instance }: { instance: Instance }): JSX.Element 
   useEffect(() => {
     setPreview(null)
     setUpdates([])
+    setBrowserOpen(false)
     void refresh(kind)
   }, [refresh, kind])
 
@@ -92,6 +95,7 @@ export function ContentPanel({ instance }: { instance: Instance }): JSX.Element 
   }
 
   const handlePreview = async (item: ContentItem): Promise<void> => {
+    setBrowserOpen(false)
     setBusy(item.key)
     try {
       const data = await window.ferry.previewContent(instance.id, kind, item.key)
@@ -169,6 +173,19 @@ export function ContentPanel({ instance }: { instance: Instance }): JSX.Element 
 
           <div className="ml-auto flex items-center gap-1.5 py-1.5">
             <span className="mr-1 text-[11.5px] tnum text-3">{t('content.count', { count: items.length })}</span>
+            {kind === 'mods' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPreview(null)
+                  setBrowserOpen(true)
+                }}
+                className="flex h-7 items-center gap-1 rounded-md border border-accent/40 bg-accent/10 px-2 text-[11.5px] font-medium accent-text"
+              >
+                <Icon name="download" size={12} />
+                {t('mods.download')}
+              </button>
+            )}
             {kind === 'mods' && (
               <button
                 type="button"
@@ -318,6 +335,28 @@ export function ContentPanel({ instance }: { instance: Instance }): JSX.Element 
           )}
         </div>
       </div>
+
+      {/* Mod 下载抽屉 */}
+      <AnimatePresence>
+        {browserOpen && kind === 'mods' && (
+          <motion.aside
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 380, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="shrink-0 overflow-hidden"
+          >
+            <ModBrowser
+              instance={instance}
+              onClose={() => setBrowserOpen(false)}
+              onInstalled={(nextItems) => {
+                setItems(nextItems)
+                setBrowserOpen(false)
+              }}
+            />
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       {/* 预览抽屉 */}
       <AnimatePresence>

@@ -21,6 +21,8 @@ pub struct AppSettings {
     pub onboarding_done: bool,
     /// 全局默认 Java 路径，实例没单独指定时用它
     pub default_java_path: Option<String>,
+    /// CurseForge API Key
+    pub curseforge_api_key: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -40,6 +42,7 @@ impl Default for AppSettings {
             last_account_id: None,
             onboarding_done: false,
             default_java_path: None,
+            curseforge_api_key: None,
         }
     }
 }

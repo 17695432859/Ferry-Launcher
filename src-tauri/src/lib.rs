@@ -1,10 +1,12 @@
 pub mod auth;
 pub mod content;
+pub mod curseforge;
 pub mod export;
 pub mod http;
 pub mod install;
 pub mod java;
 pub mod launch;
+pub mod modrinth;
 pub mod mods;
 pub mod netplay;
 pub mod roomcode;
@@ -18,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State, Window};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_dialog::DialogExt;
 
 use launch::LaunchState;
@@ -476,6 +478,118 @@ fn mods_import(app: AppHandle, state: State<'_, AppState>, id: String) -> serde_
             "cancelled": false,
             "message": message
         }),
+    }
+}
+
+/* ==========================================================================
+   Modrinth mod 下载
+   ========================================================================== */
+
+#[derive(Default)]
+pub struct ModDownloadState {
+    cancel: Mutex<Option<Arc<AtomicBool>>>,
+}
+
+/// 填了 CurseForge Key（或环境变量）就走 CurseForge，否则退回 Modrinth。
+fn curseforge_key(state: &AppState) -> Option<String> {
+    std::env::var("CURSEFORGE_API_KEY")
+        .ok()
+        .or_else(|| store::load_settings(state).curseforge_api_key.clone())
+        .map(|key| key.trim().to_string())
+        .filter(|key| !key.is_empty())
+}
+
+#[tauri::command(async)]
+fn mod_search(
+    state: State<'_, AppState>,
+    id: String,
+    query: String,
+    limit: Option<u32>,
+) -> Result<Vec<modrinth::SearchHit>, String> {
+    let instance = store::find_instance(&state, &id).ok_or("NOT_FOUND")?;
+    let query = query.trim();
+    let limit = limit.unwrap_or(20).clamp(1, 50);
+    if let Some(key) = curseforge_key(&state) {
+        return curseforge::search(&key, query, &instance.mc_version, &instance.loader, limit);
+    }
+    modrinth::search(query, &instance.mc_version, &instance.loader, limit)
+}
+
+#[tauri::command(async)]
+fn mod_download(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    download_state: State<'_, ModDownloadState>,
+    id: String,
+    project_id: String,
+) -> Result<Vec<content::ContentItem>, String> {
+    let instance = store::find_instance(&state, &id).ok_or("NOT_FOUND")?;
+    let game_dir = store::dir_of(&instance);
+    let emit = |phase: &str, received: u64, total: u64| {
+        let _ = app.emit(
+            "mod:install-progress",
+            serde_json::json!({
+                "instanceId": id,
+                "projectId": project_id,
+                "phase": phase,
+                "received": received,
+                "total": total,
+            }),
+        );
+    };
+
+    emit("resolve", 0, 0);
+    let (version, file) = if let Some(key) = curseforge_key(&state) {
+        curseforge::resolve_file(&key, &project_id, &instance.mc_version, &instance.loader)?
+    } else {
+        modrinth::resolve_file(&project_id, &instance.mc_version, &instance.loader)?
+    };
+    let file_name = std::path::Path::new(&file.filename)
+        .file_name()
+        .ok_or("BAD_FILENAME")?
+        .to_string_lossy()
+        .to_string();
+    let dest = mods::mods_dir(&game_dir).join(&file_name);
+
+    let cancel = Arc::new(AtomicBool::new(false));
+    *download_state.cancel.lock().unwrap() = Some(cancel.clone());
+
+    let instance_id = id.clone();
+    let emit_project = project_id.clone();
+    let app_for_progress = app.clone();
+    let mut on_progress = move |received: u64, total: u64| {
+        let _ = app_for_progress.emit(
+            "mod:install-progress",
+            serde_json::json!({
+                "instanceId": instance_id,
+                "projectId": emit_project,
+                "phase": "download",
+                "received": received,
+                "total": total,
+            }),
+        );
+    };
+
+    let expected = file.hashes.get("sha1").map(|s| s.as_str());
+    let result = http::download(
+        &file.url,
+        &dest,
+        expected,
+        Some(&cancel),
+        Some(&mut on_progress),
+    );
+    *download_state.cancel.lock().unwrap() = None;
+    result.map_err(|e| e.to_string())?;
+
+    emit("done", 1, 1);
+    let _ = version; // 版本信息留给以后做版本列表，当前下载完直接刷新列表
+    Ok(content::list(&game_dir, "mods"))
+}
+
+#[tauri::command]
+fn mod_download_cancel(state: State<'_, ModDownloadState>) {
+    if let Some(flag) = state.cancel.lock().unwrap().as_ref() {
+        flag.store(true, Ordering::SeqCst);
     }
 }
 
@@ -983,6 +1097,7 @@ pub fn run() {
         .manage(NetplayState::default())
         .manage(LaunchState::default())
         .manage(InstallState::default())
+        .manage(ModDownloadState::default())
         .invoke_handler(tauri::generate_handler![
             app_info,
             settings_get,
@@ -1007,6 +1122,9 @@ pub fn run() {
             mods_toggle,
             mods_delete,
             mods_import,
+            mod_search,
+            mod_download,
+            mod_download_cancel,
             instance_export,
             instance_pick_java,
             instance_icon_pick,

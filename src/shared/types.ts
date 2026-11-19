@@ -35,6 +35,8 @@ export interface AppSettings {
   onboardingDone: boolean
   /** 全局默认 Java 路径，实例没单独指定时用它 */
   defaultJavaPath: string | null
+  /** CurseForge API Key，填了之后 Mod 下载走 CurseForge */
+  curseforgeApiKey: string | null
 }
 
 /** mods 目录里的一个条目，元数据从 jar 内部读取 */
@@ -139,7 +141,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   locale: 'zh-CN',
   lastAccountId: null,
   onboardingDone: false,
-  defaultJavaPath: null
+  defaultJavaPath: null,
+  curseforgeApiKey: null
 }
 
 export const BLUR_RANGE = { min: 0, max: 40 } as const
@@ -283,6 +286,29 @@ export interface ModUpdate {
   projectTitle: string
   downloadUrl: string
   fileName: string
+}
+
+/** Modrinth 搜索结果（只保留界面需要的字段） */
+export interface ModSearchHit {
+  source: 'modrinth' | 'curseforge'
+  projectId: string
+  slug: string
+  title: string
+  description: string
+  iconUrl: string | null
+  author: string
+  downloads: number
+  categories: string[]
+  versions: string[]
+  latestVersion: string | null
+}
+
+export interface ModInstallProgress {
+  instanceId: string
+  projectId: string
+  phase: 'resolve' | 'download' | 'done'
+  received: number
+  total: number
 }
 
 /* ==========================================================================
