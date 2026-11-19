@@ -598,7 +598,7 @@ pub fn launch(
         });
     }
 
-    *state.child.lock().unwrap() = Some(child);
+    *crate::util::lock(&state.child) = Some(child);
     state.running.store(true, Ordering::SeqCst);
     emit_state(app, "running", String::new(), Some(pid));
 
@@ -612,7 +612,7 @@ pub fn launch(
     let game_dir_for_guard = game_dir.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_millis(800));
-        let mut guard = guard_state.child.lock().unwrap();
+        let mut guard = crate::util::lock(&guard_state.child);
         let Some(child) = guard.as_mut() else {
             break;
         };
@@ -660,7 +660,7 @@ pub fn launch(
 }
 
 pub fn stop(state: &LaunchState) -> Result<(), String> {
-    let mut guard = state.child.lock().unwrap();
+    let mut guard = crate::util::lock(&state.child);
     if let Some(child) = guard.as_mut() {
         child.kill().map_err(|e| e.to_string())?;
     }

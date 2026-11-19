@@ -84,7 +84,7 @@ static MANIFEST_CACHE: Mutex<Option<(String, Instant, Vec<VersionSummary>)>> = M
 
 pub fn manifest(source: &str) -> Result<Vec<VersionSummary>, String> {
     {
-        let guard = MANIFEST_CACHE.lock().unwrap();
+        let guard = crate::util::lock(&MANIFEST_CACHE);
         if let Some((key, at, list)) = guard.as_ref() {
             if key == source && at.elapsed() < Duration::from_secs(600) && !list.is_empty() {
                 return Ok(list.clone());
@@ -113,7 +113,7 @@ pub fn manifest(source: &str) -> Result<Vec<VersionSummary>, String> {
     if list.is_empty() {
         return Err(last_error);
     }
-    *MANIFEST_CACHE.lock().unwrap() = Some((source.to_string(), Instant::now(), list.clone()));
+    *crate::util::lock(&MANIFEST_CACHE) = Some((source.to_string(), Instant::now(), list.clone()));
     Ok(list)
 }
 
@@ -236,11 +236,11 @@ fn run_tasks(
                 }
                 let task = &tasks[index];
                 if let Err(error) = http::download(&task.url, &task.dest, task.sha1.as_deref(), Some(cancel), None) {
-                    errors.lock().unwrap().push(error);
+                    crate::util::lock(&errors).push(error);
                     return;
                 }
                 let finished = done.fetch_add(1, Ordering::SeqCst) + 1;
-                let mut last = last_emit.lock().unwrap();
+                let mut last = crate::util::lock(&last_emit);
                 if last.elapsed() > Duration::from_millis(120) || finished == total {
                     *last = Instant::now();
                     let name = task
@@ -254,7 +254,9 @@ fn run_tasks(
         }
     });
 
-    let errors = errors.into_inner().unwrap();
+    // 某个下载线程 panic 时 into_inner 会返回 Err，这里退回空列表，
+    // 让上层按「没有错误」继续，而不是把整个启动器一起带走。
+    let errors = errors.into_inner().unwrap_or_default();
     if let Some(first) = errors.into_iter().next() {
         if first == "CANCELLED" {
             return Err("CANCELLED".into());

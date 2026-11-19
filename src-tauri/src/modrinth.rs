@@ -43,6 +43,16 @@ pub struct SearchHit {
 struct SearchResponse {
     #[serde(default)]
     hits: Vec<SearchHit>,
+    #[serde(default, alias = "total_hits")]
+    total: u64,
+}
+
+/// 一页搜索结果，带总数供界面算页数。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchPage {
+    pub hits: Vec<SearchHit>,
+    pub total: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +107,8 @@ pub fn search(
     category: &str,
     content_type: &str,
     limit: u32,
-) -> Result<Vec<SearchHit>, String> {
+    page: u32,
+) -> Result<SearchPage, String> {
     let project_type = crate::content_types::modrinth_project_type(content_type);
     let mut facets: Vec<Vec<String>> = vec![vec![format!("project_type:{project_type}")]];
     if crate::content_types::uses_loader(content_type) {
@@ -117,10 +128,14 @@ pub fn search(
         .append_pair("query", query)
         .append_pair("facets", &serde_json::to_string(&facets).map_err(|e| e.to_string())?)
         .append_pair("limit", &limit.to_string())
+        .append_pair("offset", &((page.saturating_sub(1)) * limit).to_string())
         .append_pair("index", "relevance");
 
     let response: SearchResponse = crate::http::get_json(url.as_str())?;
-    Ok(response.hits)
+    Ok(SearchPage {
+        hits: response.hits,
+        total: response.total,
+    })
 }
 
 /// 找一个与 game_version / loader 匹配的最新 release，返回主文件。

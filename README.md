@@ -13,7 +13,7 @@
 - **账户**：LittleSkin 外置登录、微软登录、离线账户。一个账户下的多个角色可以切换，令牌静默刷新，token 存系统凭据库。角色切换遇到 `Access token already has a profile assigned` 时会用凭据库里的密码重新换令牌。
 - **皮肤**：账户页有 3D 皮肤预览，支持 slim / classic 模型。
 - **内容管理**：按实例看 mod、存档、日志、资源包；能预览、启用/禁用、删除、导入、检查更新。mod 的元数据从 jar 内部读。
-- **资源下载**：「下载」页里有「游戏版本」和「Mod / 资源」两个标签。后者支持五类内容——Mod、整合包、数据包、资源包、光影包——可按名称、来源（CurseForge / Modrinth / 全部）、游戏版本、加载器和分类筛选，选中后指定目标实例一键安装，并实时显示下载进度。文件会落到对应的 `mods`、`modpacks`、`datapacks`、`resourcepacks`、`shaderpacks` 目录。CurseForge 需要在设置里填入自己的 API Key（密钥只存在本机，环境变量 `CURSEFORGE_API_KEY` 也可以）；留空则使用不需要密钥的 Modrinth。实例详情里的 Mod 面板仍保留一个快捷抽屉。
+- **资源下载**：「下载」页里有「游戏版本」和「Mod / 资源」两个标签。后者支持五类内容——Mod、整合包、数据包、资源包、光影包——可按名称、来源（CurseForge / Modrinth / 全部）、游戏版本、加载器和分类筛选，结果分页展示（每页 24 条，支持上一页/下一页、首页/末页和页码直达）。选中后指定目标实例一键安装，并实时显示下载进度。文件会落到对应的 `mods`、`modpacks`、`datapacks`、`resourcepacks`、`shaderpacks` 目录。CurseForge 需要在设置里填入自己的 API Key（密钥只存在本机，环境变量 `CURSEFORGE_API_KEY` 也可以）；留空则使用不需要密钥的 Modrinth。实例详情里的 Mod 面板仍保留一个快捷抽屉。
 - **联机**：陶瓦联机和 EasyTier 直连，房间码/联机码生成与解析。两个运行时都能在应用内下载安装。
 - **Java**：多线程扫描本机 Java（含 PCL 自带的 JRE），1.21+ 需要 Java 21 但没有时可以一键从清华镜像下载。启动前校验主版本，版本不对直接提示而不是闪退。
 - **启动与崩溃分析**：拼完整 JVM 参数、SHA1 校验、并发下载、解压原生库、捕获日志。游戏异常退出时自动读 `ferry-latest.log` / `latest.log` / `crash-reports`，匹配 Java 版本、内存不足、缺前置、Mod 冲突、显卡驱动、存档损坏等十余种常见问题，直接给出原因和修复建议；也可以随时点启动按钮旁的「分析日志」手动分析。
@@ -84,6 +84,13 @@ cargo test --release --test backend -j 2 --manifest-path src-tauri/Cargo.toml
 ## 宣传片
 
 `promo/FerryLauncher-promo.mp4`：70 秒，1080p30，实机内录 + 原创合成配乐。画面通过 CDP 驱动真实界面，用 ffmpeg 30fps 抓窗口，不是截图拼接。脚本在 `scripts/promo/`。
+
+## 稳定性
+
+- 发布配置用 `panic = "unwind"`，后端单条命令出错只让那一次调用失败，不会把整个进程带走。
+- 所有互斥锁通过 `util::lock` 获取，会从毒锁里恢复；后端代码里没有裸 `unwrap()`。
+- 崩溃会追加到数据目录的 `ferry-crash.log`（`%APPDATA%/ferry-launcher/`）。
+- 渲染层有 ErrorBoundary，组件报错时显示「重新加载」而不是白屏。
 
 ## 已知限制
 

@@ -827,7 +827,10 @@ pub fn toggle(game_dir: &str, kind: &str, key: &str, enabled: bool) -> Result<Ve
     }
     let base = Path::new(game_dir).join(kind);
     let path = safe_child(&base, key)?;
-    let name = path.file_name().unwrap().to_string_lossy().to_string();
+    let Some(os_name) = path.file_name() else {
+        return Err("BAD_FILENAME".into());
+    };
+    let name = os_name.to_string_lossy().to_string();
     let next = if enabled {
         name.trim_end_matches(".disabled").to_string()
     } else if name.to_lowercase().ends_with(".disabled") {

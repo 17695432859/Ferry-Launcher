@@ -269,7 +269,7 @@ pub fn detect(game_dirs: &[String]) -> Vec<JavaInfo> {
                     break;
                 }
                 if let Some(info) = probe(&candidates[index]) {
-                    found.lock().unwrap().push(info);
+                    crate::util::lock(&found).push(info);
                 }
             });
         }

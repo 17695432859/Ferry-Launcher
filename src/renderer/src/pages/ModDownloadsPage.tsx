@@ -82,6 +82,9 @@ export function ModDownloadPanel(): JSX.Element {
   const [category, setCategory] = useState('')
 
   const [hits, setHits] = useState<ModSearchHit[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageInput, setPageInput] = useState('1')
   const [selected, setSelected] = useState<ModSearchHit | null>(null)
   const [searching, setSearching] = useState(false)
   const [searched, setSearched] = useState(false)
@@ -93,6 +96,7 @@ export function ModDownloadPanel(): JSX.Element {
 
   const queryRef = useRef('')
   const seqRef = useRef(0)
+  const listRef = useRef<HTMLDivElement | null>(null)
 
   // 默认装到当前选中的实例
   useEffect(() => {
@@ -126,23 +130,28 @@ export function ModDownloadPanel(): JSX.Element {
       setSearching(true)
       setError(null)
       try {
-        const list = await window.ferry.searchModsGlobal(text, {
+        const result = await window.ferry.searchModsGlobal(text, {
           gameVersion,
           loader,
           source,
           category,
           contentType,
+          page,
           limit: 24
         })
         if (seq !== seqRef.current) return
-        setHits(list)
+        setHits(result.hits)
+        setTotal(result.total)
         setSelected((prev) =>
-          prev ? (list.find((item) => item.projectId === prev.projectId && item.source === prev.source) ?? list[0] ?? null) : (list[0] ?? null)
+          prev
+            ? (result.hits.find((item) => item.projectId === prev.projectId && item.source === prev.source) ?? result.hits[0] ?? null)
+            : (result.hits[0] ?? null)
         )
         setSearched(true)
       } catch (cause) {
         if (seq !== seqRef.current) return
         setHits([])
+        setTotal(0)
         setSelected(null)
         setSearched(true)
         const message = String(cause)
@@ -151,13 +160,46 @@ export function ModDownloadPanel(): JSX.Element {
         if (seq === seqRef.current) setSearching(false)
       }
     },
-    [gameVersion, loader, source, category, contentType, t]
+    [gameVersion, loader, source, category, contentType, page, t]
   )
 
-  // 筛选条件一变就重新搜索；关键词按回车或点按钮才生效
+  // 筛选条件一变就回到第一页重新搜索；关键词按回车或点按钮才生效
   useEffect(() => {
     void runSearch(queryRef.current)
   }, [runSearch])
+
+  // 翻页后回到列表顶部，否则用户还停在上一页的滚动位置
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0
+    setPageInput(String(page))
+  }, [page])
+
+  // 页码输入框：越界就夹到有效范围
+  const commitPageInput = (): void => {
+    const parsed = Number.parseInt(pageInput, 10)
+    if (!Number.isFinite(parsed)) {
+      setPageInput(String(page))
+      return
+    }
+    const next = Math.min(pageCount, Math.max(1, parsed))
+    if (next === page) setPageInput(String(page))
+    else setPage(next)
+  }
+
+  const submitSearch = (text: string): void => {
+    queryRef.current = text
+    if (page === 1) {
+      void runSearch(text)
+    } else {
+      setPage(1)
+    }
+  }
+
+  // 任何筛选条件变化都回到第一页，避免出现「翻到第 5 页再改版本」这种空结果
+  const changeFilter = <T,>(setter: (value: T) => void) => (value: T): void => {
+    setPage(1)
+    setter(value)
+  }
 
   const target = useMemo(() => instances.find((item) => item.id === instanceId) ?? null, [instances, instanceId])
 
@@ -201,6 +243,9 @@ export function ModDownloadPanel(): JSX.Element {
       : 0
 
   const noKeyBlocked = selected?.source === 'curseforge' && !settings.curseforgeApiKey
+  const pageCount = Math.max(1, Math.ceil(total / 24))
+  const canPrev = page > 1 && !searching
+  const canNext = page < pageCount && !searching
   const stableVersions = (selected?.versions ?? []).filter((item) => /^\d+\.\d+(\.\d+)?$/.test(item))
   const displayVersions = (stableVersions.length > 0 ? stableVersions : (selected?.versions ?? []))
     .slice(-3)
@@ -216,7 +261,7 @@ export function ModDownloadPanel(): JSX.Element {
             <button
               key={item.id}
               type="button"
-              onClick={() => setContentType(item.id)}
+              onClick={() => changeFilter(setContentType)(item.id)}
               className={`rounded-md px-2 py-1 text-[11.5px] transition-colors ${
                 contentType === item.id
                   ? 'bg-accent/15 accent-text'
@@ -240,7 +285,7 @@ export function ModDownloadPanel(): JSX.Element {
                 queryRef.current = event.target.value
               }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void runSearch(queryRef.current)
+                if (event.key === 'Enter') submitSearch(queryRef.current)
               }}
               placeholder={t('mods.page.search')}
               className="h-9 w-full rounded-lg border border-[var(--hairline)] bg-[var(--hover-bg)] pl-8 pr-2 text-[12.5px] text-1 outline-none placeholder:text-3 focus:border-accent/50"
@@ -249,7 +294,7 @@ export function ModDownloadPanel(): JSX.Element {
           <button
             type="button"
             disabled={searching}
-            onClick={() => void runSearch(queryRef.current)}
+            onClick={() => submitSearch(queryRef.current)}
             className="h-9 shrink-0 rounded-lg bg-accent px-3 text-[12.5px] font-medium text-[var(--accent-ink)] disabled:opacity-50"
           >
             {searching ? t('mods.page.searching') : t('mods.page.searchButton')}
@@ -260,7 +305,7 @@ export function ModDownloadPanel(): JSX.Element {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setSource(item.id)}
+                onClick={() => changeFilter(setSource)(item.id)}
                 className={`relative h-8 rounded-[6px] px-2.5 text-[12px] transition-colors ${
                   source === item.id ? 'text-1' : 'text-3 hover:text-2'
                 }`}
@@ -280,7 +325,7 @@ export function ModDownloadPanel(): JSX.Element {
           <div className="w-[130px] shrink-0">
             <Select
               value={gameVersion}
-              onChange={setGameVersion}
+              onChange={changeFilter(setGameVersion)}
               placeholder={t('mods.page.anyVersion')}
               options={[
                 { value: '', label: t('mods.page.anyVersion') },
@@ -293,7 +338,7 @@ export function ModDownloadPanel(): JSX.Element {
             <div className="w-[116px] shrink-0">
               <Select
                 value={loader}
-                onChange={setLoader}
+                onChange={changeFilter(setLoader)}
                 placeholder={t('mods.page.anyLoader')}
                 options={LOADERS.map((item) => ({ value: item.value, label: t(item.key) }))}
               />
@@ -302,7 +347,7 @@ export function ModDownloadPanel(): JSX.Element {
           <div className="w-[126px] shrink-0">
             <Select
               value={category}
-              onChange={setCategory}
+              onChange={changeFilter(setCategory)}
               placeholder={t('mods.page.anyCategory')}
               options={CATEGORIES.map((item) => ({ value: item.value, label: t(item.key) }))}
             />
@@ -334,17 +379,17 @@ export function ModDownloadPanel(): JSX.Element {
 
         <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-3">
           {/* 搜索结果 */}
-          <div className="glass flex min-h-[440px] flex-col overflow-hidden rounded-panel">
+          <div className="glass flex max-h-[calc(100vh-320px)] min-h-[340px] flex-col overflow-hidden rounded-panel">
             <div className="flex items-center justify-between border-b border-[var(--hairline)] px-3 py-2">
               <span className="text-[12px] text-2">
-                {searched && hits.length > 0 ? t('mods.page.found', { count: hits.length }) : t('mods.page.title')}
+                {searched && total > 0 ? t('mods.page.found', { count: total }) : t('mods.page.title')}
               </span>
               {source === 'all' && !settings.curseforgeApiKey && (
                 <span className="text-[10.5px] text-3">{t('mods.page.powered', { source: 'Modrinth' })}</span>
               )}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+            <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {searching && hits.length === 0 ? (
                 <p className="py-12 text-center text-[12.5px] text-3">{t('mods.page.searching')}</p>
               ) : !searched ? (
@@ -402,6 +447,65 @@ export function ModDownloadPanel(): JSX.Element {
                 </div>
               )}
             </div>
+
+            {/* 分页：24 条一页，支持逐页翻和直接跳页 */}
+            {searched && total > 24 && (
+              <div className="flex items-center justify-center gap-1.5 border-t border-[var(--hairline)] px-3 py-2">
+                <button
+                  type="button"
+                  disabled={!canPrev}
+                  onClick={() => setPage(1)}
+                  title={t('mods.page.first')}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--hairline)] text-2 transition-colors hover:text-1 disabled:opacity-35"
+                >
+                  <Icon name="chevron" size={11} className="rotate-180" />
+                  <Icon name="chevron" size={11} className="-ml-1.5 rotate-180" />
+                </button>
+                <button
+                  type="button"
+                  disabled={!canPrev}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  className="flex h-7 items-center gap-0.5 rounded-md border border-[var(--hairline)] px-1.5 text-[11.5px] text-2 transition-colors hover:text-1 disabled:opacity-35"
+                >
+                  <Icon name="chevron" size={11} className="rotate-180" />
+                  {t('mods.page.prev')}
+                </button>
+
+                <span className="flex items-center gap-1 text-[11.5px] text-3">
+                  {t('mods.page.pageLabel')}
+                  <input
+                    value={pageInput}
+                    onChange={(event) => setPageInput(event.target.value.replace(/[^\d]/g, ''))}
+                    onBlur={() => commitPageInput()}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') commitPageInput()
+                    }}
+                    className="tnum h-7 w-12 rounded-md border border-[var(--hairline)] bg-[var(--hover-bg)] text-center text-[11.5px] text-1 outline-none focus:border-accent/50"
+                  />
+                  <span className="tnum">/ {pageCount}</span>
+                </span>
+
+                <button
+                  type="button"
+                  disabled={!canNext}
+                  onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
+                  className="flex h-7 items-center gap-0.5 rounded-md border border-[var(--hairline)] px-1.5 text-[11.5px] text-2 transition-colors hover:text-1 disabled:opacity-35"
+                >
+                  {t('mods.page.next')}
+                  <Icon name="chevron" size={11} />
+                </button>
+                <button
+                  type="button"
+                  disabled={!canNext}
+                  onClick={() => setPage(pageCount)}
+                  title={t('mods.page.last')}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--hairline)] text-2 transition-colors hover:text-1 disabled:opacity-35"
+                >
+                  <Icon name="chevron" size={11} />
+                  <Icon name="chevron" size={11} className="-ml-1.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 详情与安装 */}

@@ -5,6 +5,7 @@ import '@fontsource-variable/inter'
 // 打进 exe 太重，收益也远不如拉丁字母明显。
 import './styles/index.css'
 import { Root } from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { createTauriFerry, isTauri } from './lib/ferry-tauri'
 
 // Electron 壳由 preload 注入 window.ferry；Tauri 壳在这里补上同名接口，
@@ -18,6 +19,8 @@ if (!container) throw new Error('root container missing')
 
 createRoot(container).render(
   <StrictMode>
-    <Root />
+    <ErrorBoundary>
+      <Root />
+    </ErrorBoundary>
   </StrictMode>
 )

@@ -512,7 +512,7 @@ fn mod_search(
     let query = query.trim();
     let limit = limit.unwrap_or(20).clamp(1, 50);
     if let Some(key) = curseforge_key(&state) {
-        return curseforge::search(
+        let page = curseforge::search(
             &key,
             query,
             &instance.mc_version,
@@ -520,9 +520,12 @@ fn mod_search(
             "",
             "mod",
             limit,
-        );
+            1,
+        )?;
+        return Ok(page.hits);
     }
-    modrinth::search(query, &instance.mc_version, &instance.loader, "", "mod", limit)
+    let page = modrinth::search(query, &instance.mc_version, &instance.loader, "", "mod", limit, 1)?;
+    Ok(page.hits)
 }
 
 /// 全局 Mod 搜索：不依赖任何实例，筛选条件由界面显式传入。
@@ -537,7 +540,8 @@ fn mod_search_global(
     category: Option<String>,
     content_type: Option<String>,
     limit: Option<u32>,
-) -> Result<Vec<modrinth::SearchHit>, String> {
+    page: Option<u32>,
+) -> Result<modrinth::SearchPage, String> {
     let query = query.trim();
     let content_type = content_types::normalize(content_type.as_deref().unwrap_or("mod"));
     let game_version = game_version.unwrap_or_default();
@@ -548,6 +552,7 @@ fn mod_search_global(
         .trim()
         .to_ascii_lowercase();
     let limit = limit.unwrap_or(24).clamp(1, 50);
+    let page = page.unwrap_or(1).max(1);
 
     let key = curseforge_key(&state);
     if source == "curseforge" && key.is_none() {
@@ -557,36 +562,49 @@ fn mod_search_global(
     let use_curseforge = (source == "curseforge" || source == "all") && key.is_some();
     let use_modrinth = source == "modrinth" || source == "all";
 
+    // 两个来源时各取半页，合起来正好是一页，total 相加。
+    let per_source = if use_curseforge && use_modrinth {
+        (limit / 2).max(1)
+    } else {
+        limit
+    };
+
     let mut hits: Vec<modrinth::SearchHit> = Vec::new();
+    let mut total: u64 = 0;
     if use_curseforge {
-        hits.extend(curseforge::search(
+        let result = curseforge::search(
             key.as_deref().unwrap_or(""),
             query,
             &game_version,
             &loader,
             category.trim(),
             content_type,
-            limit,
-        )?);
+            per_source,
+            page,
+        )?;
+        total += result.total;
+        hits.extend(result.hits);
     }
     if use_modrinth {
-        hits.extend(modrinth::search(
+        let result = modrinth::search(
             query,
             &game_version,
             &loader,
             category.trim(),
             content_type,
-            limit,
-        )?);
+            per_source,
+            page,
+        )?;
+        total += result.total;
+        hits.extend(result.hits);
     }
 
     // 同时搜索两个来源时按下载量降序，避免某一来源固定霸占前面。
     // 单来源时保留 API 原本的相关度排序。
-    if source == "all" {
+    if use_curseforge && use_modrinth {
         hits.sort_by(|a, b| b.downloads.cmp(&a.downloads));
     }
-    hits.truncate((limit as usize).saturating_mul(2));
-    Ok(hits)
+    Ok(modrinth::SearchPage { hits, total })
 }
 
 #[tauri::command(async)]
@@ -649,7 +667,7 @@ fn mod_download(
     let dest = dest_dir.join(&file_name);
 
     let cancel = Arc::new(AtomicBool::new(false));
-    *download_state.cancel.lock().unwrap() = Some(cancel.clone());
+    *crate::util::lock(&download_state.cancel) = Some(cancel.clone());
 
     let instance_id = id.clone();
     let emit_project = project_id.clone();
@@ -675,7 +693,7 @@ fn mod_download(
         Some(&cancel),
         Some(&mut on_progress),
     );
-    *download_state.cancel.lock().unwrap() = None;
+    *crate::util::lock(&download_state.cancel) = None;
     result.map_err(|e| e.to_string())?;
 
     emit("done", 1, 1);
@@ -696,7 +714,7 @@ fn crash_analyze(state: State<'_, AppState>, id: String) -> Result<crash::Report
 
 #[tauri::command]
 fn mod_download_cancel(state: State<'_, ModDownloadState>) {
-    if let Some(flag) = state.cancel.lock().unwrap().as_ref() {
+    if let Some(flag) = crate::util::lock(&state.cancel).as_ref() {
         flag.store(true, Ordering::SeqCst);
     }
 }
@@ -938,7 +956,7 @@ fn install_start(
     request: install::InstallRequest,
 ) -> serde_json::Value {
     let cancel = Arc::new(AtomicBool::new(false));
-    *state.cancel.lock().unwrap() = Some(cancel.clone());
+    *crate::util::lock(&state.cancel) = Some(cancel.clone());
     match install::install(&app, &request, &cancel) {
         Ok(version_id) => serde_json::json!({ "ok": true, "versionId": version_id }),
         Err(message) => {
@@ -956,7 +974,7 @@ fn install_start(
 
 #[tauri::command]
 fn install_cancel(state: State<'_, InstallState>) {
-    if let Some(flag) = state.cancel.lock().unwrap().as_ref() {
+    if let Some(flag) = crate::util::lock(&state.cancel).as_ref() {
         flag.store(true, Ordering::SeqCst);
     }
 }
@@ -1197,7 +1215,39 @@ fn window_close(window: Window) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// panic 兜底：追加到数据目录下的 ferry-crash.log。
+/// 不弹窗、不退出进程——大部分 panic 发生在某个后台线程里，
+/// 只让那一次操作失败即可，没必要把整个启动器带走。
+fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let path = util::data_file("ferry-crash.log");
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+            use std::io::Write;
+            let location = info
+                .location()
+                .map(|loc| format!("{}:{}", loc.file(), loc.line()))
+                .unwrap_or_else(|| "unknown".into());
+            let message = if let Some(text) = info.payload().downcast_ref::<&str>() {
+                (*text).to_string()
+            } else if let Some(text) = info.payload().downcast_ref::<String>() {
+                text.clone()
+            } else {
+                "unknown panic".into()
+            };
+            let _ = writeln!(file, "[{}] {location}: {message}", util::now_stamp());
+        }
+        // 保留默认行为（debug 下仍会打印到控制台），但不 abort
+        if cfg!(debug_assertions) {
+            default_hook(info);
+        }
+    }));
+}
+
 pub fn run() {
+    // 把 panic 写进 ferry-crash.log，方便事后定位；进程本身继续跑。
+    install_panic_hook();
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -1274,8 +1324,25 @@ pub fn run() {
             window_toggle_maximize,
             window_close
         ])
-        .build(tauri::generate_context!())
-        .expect("error while building ferry launcher");
+        .build(tauri::generate_context!());
+
+    let app = match app {
+        Ok(app) => app,
+        Err(error) => {
+            // 构建失败（比如 WebView2 运行时缺失）时写日志并退出，
+            // 而不是 panic 出栈让用户看到「应用闪一下就没了」。
+            let path = util::data_file("ferry-crash.log");
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    writeln!(file, "[{}] build failed: {error}", util::now_stamp())
+                });
+            return;
+        }
+    };
 
     app.run(|handle, event| {
         // 退出时把联机进程收掉，别留孤儿 terracotta / easytier-core

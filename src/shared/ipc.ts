@@ -20,6 +20,7 @@ import type {
   ModEntry,
   ModInstallProgress,
   ModSearchHit,
+  ModSearchPage,
   ModUpdate,
   NetplayProviderId,
   NetplayRuntime,
@@ -123,6 +124,7 @@ export interface ModSearchOptions {
   source?: 'all' | 'curseforge' | 'modrinth'
   category?: string
   contentType?: DownloadContentType
+  page?: number
   limit?: number
 }
 
@@ -233,7 +235,7 @@ export interface FerryApi {
   upgradeMod(id: string, key: string, url: string, fileName: string): Promise<ContentItem[]>
   searchMods(id: string, query: string, limit?: number): Promise<ModSearchHit[]>
   /** 全局 Mod 搜索，不绑定实例 */
-  searchModsGlobal(query: string, options?: ModSearchOptions): Promise<ModSearchHit[]>
+  searchModsGlobal(query: string, options?: ModSearchOptions): Promise<ModSearchPage>
   downloadMod(id: string, projectId: string, options?: ModDownloadOptions): Promise<ContentItem[]>
   cancelModDownload(): Promise<void>
   onModInstallProgress(listener: (progress: ModInstallProgress) => void): () => void

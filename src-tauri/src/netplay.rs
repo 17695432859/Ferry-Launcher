@@ -467,7 +467,7 @@ pub fn runtime_info(provider: &str) -> serde_json::Value {
 }
 
 fn ensure_terracotta_running(app: &AppHandle, state: &NetplayState) -> Result<NetplayStatus, String> {
-    let mut guard = state.session.lock().unwrap();
+    let mut guard = crate::util::lock(&state.session);
     if let Some(current) = guard.as_ref() {
         return Ok(current.status.clone());
     }
@@ -512,7 +512,7 @@ pub fn host(app: &AppHandle, state: &NetplayState, room: &str, player: &str) -> 
         }
     }
     let port = {
-        let guard = state.session.lock().unwrap();
+        let guard = crate::util::lock(&state.session);
         match guard.as_ref() {
             Some(session) => session.port,
             None => return fail("error", "NOT_RUNNING"),
@@ -531,7 +531,7 @@ pub fn host(app: &AppHandle, state: &NetplayState, room: &str, player: &str) -> 
     };
     let _ = http_get(port, &route);
     let status = {
-        let mut guard = state.session.lock().unwrap();
+        let mut guard = crate::util::lock(&state.session);
         if let Some(session) = guard.as_mut() {
             session.status.phase = "scanning".into();
             session.status.room_code = None;
@@ -557,7 +557,7 @@ pub fn join(app: &AppHandle, state: &NetplayState, room: &str, player: &str) -> 
         }
     }
     let port = {
-        let guard = state.session.lock().unwrap();
+        let guard = crate::util::lock(&state.session);
         match guard.as_ref() {
             Some(session) => session.port,
             None => return fail("error", "NOT_RUNNING"),
@@ -570,7 +570,7 @@ pub fn join(app: &AppHandle, state: &NetplayState, room: &str, player: &str) -> 
     );
     let _ = http_get(port, &route);
     let status = {
-        let mut guard = state.session.lock().unwrap();
+        let mut guard = crate::util::lock(&state.session);
         if let Some(session) = guard.as_mut() {
             session.status.phase = "connecting".into();
             session.status.room_code = Some(code.clone());
@@ -583,7 +583,7 @@ pub fn join(app: &AppHandle, state: &NetplayState, room: &str, player: &str) -> 
 }
 
 pub fn stop(state: &NetplayState) -> NetplayStatus {
-    let mut guard = state.session.lock().unwrap();
+    let mut guard = crate::util::lock(&state.session);
     if let Some(mut session) = guard.take() {
         let _ = http_get(session.port, "/state/ide");
         let _ = session.child.kill();
@@ -592,7 +592,7 @@ pub fn stop(state: &NetplayState) -> NetplayStatus {
 }
 
 pub fn status(state: &NetplayState) -> NetplayStatus {
-    let guard = state.session.lock().unwrap();
+    let guard = crate::util::lock(&state.session);
     match guard.as_ref() {
         Some(session) => session.status.clone(),
         None => NetplayStatus::default(),
@@ -665,7 +665,7 @@ pub fn start_easytier(state: &NetplayState, config: &serde_json::Value) -> serde
                 message: Some(name.to_string()),
                 ..Default::default()
             };
-            *state.session.lock().unwrap() = Some(Session {
+            *crate::util::lock(&state.session) = Some(Session {
                 child,
                 port: 0,
                 status: status.clone(),
@@ -716,7 +716,7 @@ fn urlencode(raw: &str) -> String {
 }
 
 pub fn dispose(state: &NetplayState) {
-    let mut guard = state.session.lock().unwrap();
+    let mut guard = crate::util::lock(&state.session);
     if let Some(mut session) = guard.take() {
         let _ = session.child.kill();
     }

@@ -53,6 +53,7 @@ export function createTauriFerry(): FerryApi {
         source: options?.source ?? 'all',
         category: options?.category ?? '',
         contentType: options?.contentType ?? 'mod',
+        page: options?.page ?? 1,
         limit: options?.limit ?? 24
       }),
     downloadMod: (id, projectId, options?: ModDownloadOptions) =>

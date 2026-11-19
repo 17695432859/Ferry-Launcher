@@ -141,7 +141,7 @@ fn instances_path() -> std::path::PathBuf {
 }
 
 pub fn load_settings(state: &AppState) -> AppSettings {
-    let mut guard = state.settings.lock().unwrap();
+    let mut guard = crate::util::lock(&state.settings);
     if let Some(cached) = guard.as_ref() {
         return cached.clone();
     }
@@ -165,12 +165,12 @@ pub fn save_settings(state: &AppState, patch: serde_json::Value) -> Result<AppSe
     let parsed = serde_json::from_value::<AppSettings>(merged).map_err(|e| e.to_string())?;
     let next = parsed.sanitized();
     write_json(&settings_path(), &next)?;
-    *state.settings.lock().unwrap() = Some(next.clone());
+    *crate::util::lock(&state.settings) = Some(next.clone());
     Ok(next)
 }
 
 pub fn load_instances(state: &AppState) -> Vec<Instance> {
-    let mut guard = state.instances.lock().unwrap();
+    let mut guard = crate::util::lock(&state.instances);
     if let Some(cached) = guard.as_ref() {
         return cached.clone();
     }
@@ -204,7 +204,7 @@ pub fn load_instances(state: &AppState) -> Vec<Instance> {
 
 fn persist_instances(state: &AppState, list: &[Instance]) -> Result<(), String> {
     write_json(&instances_path(), &list.to_vec())?;
-    *state.instances.lock().unwrap() = Some(list.to_vec());
+    *crate::util::lock(&state.instances) = Some(list.to_vec());
     Ok(())
 }
 

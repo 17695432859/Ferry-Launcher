@@ -322,6 +322,12 @@ export interface CrashReport {
   sources: string[]
 }
 
+/** Mod 搜索的一页结果 */
+export interface ModSearchPage {
+  hits: ModSearchHit[]
+  total: number
+}
+
 export interface ModInstallProgress {
   instanceId: string
   projectId: string

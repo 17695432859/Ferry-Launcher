@@ -1,5 +1,18 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
+
+/// 取互斥锁，遇到「毒锁」直接恢复内部数据继续用。
+///
+/// 默认的 `lock().unwrap()` 在某个线程持锁时 panic 之后会永久失败，
+/// 之后每一次访问都 panic，最终表现就是整个启动器莫名其妙退出。
+/// 这里宁可继续用可能不一致的数据，也不让一次局部错误扩散成全局崩溃。
+pub fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
 
 /// 所有持久化数据都放在 %APPDATA%/ferry-launcher，和 Electron 版一致，
 /// 这样两个壳可以共用同一份用户数据。
@@ -20,6 +33,40 @@ pub fn data_dir() -> PathBuf {
 
 pub fn data_file(name: &str) -> PathBuf {
     data_dir().join(name)
+}
+
+/// 简单的本地时间戳，给崩溃日志用（不引第三方时间库）。
+pub fn now_stamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // 东八区偏移；只用于日志可读性，不参与业务计算
+    let local = secs + 8 * 3600;
+    let days = local / 86400;
+    let rem = local % 86400;
+    let (year, month, day) = civil_from_days(days as i64);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}",
+        rem / 3600,
+        (rem % 3600) / 60,
+        rem % 60
+    )
+}
+
+/// Howard Hinnant 的 days-from-civil 逆运算，避免为了一个时间戳引入 chrono。
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {

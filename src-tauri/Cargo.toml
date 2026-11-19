@@ -38,7 +38,11 @@ keyring = { version = "3", features = ["windows-native", "apple-native", "linux-
 
 [profile.release]
 codegen-units = 1
-lto = true
-opt-level = "s"
-panic = "abort"
-strip = true
+lto = "fat"
+# 体积优先：unwind 会带来额外的栈展开表，用 z 把能省的空间省回来
+opt-level = "z"
+# 用 unwind 而不是 abort：单条命令 panic 时只让那次调用失败，
+# 不会把整个启动器进程一起带走。配合 util::lock 的毒锁恢复，
+# 后台线程出错也不会再表现为「应用突然消失」。
+panic = "unwind"
+strip = "symbols"

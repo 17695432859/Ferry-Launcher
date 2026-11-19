@@ -153,7 +153,11 @@ fn resolve_file(game_dir: &str, file_name: &str) -> Result<PathBuf, String> {
 
 pub fn toggle_mod(game_dir: &str, file_name: &str, enabled: bool) -> Result<Vec<ModEntry>, String> {
     let path = resolve_file(game_dir, file_name)?;
-    let name = path.file_name().unwrap().to_string_lossy().to_string();
+    let name = path
+        .file_name()
+        .ok_or("BAD_FILENAME")?
+        .to_string_lossy()
+        .to_string();
     let next_name = if enabled {
         name.trim_end_matches(".disabled").to_string()
     } else if name.to_lowercase().ends_with(".jar") {

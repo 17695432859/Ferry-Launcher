@@ -6,7 +6,7 @@
 use reqwest::Url;
 use serde::Deserialize;
 
-use crate::modrinth::{ModFile, ModVersion, SearchHit};
+use crate::modrinth::{ModFile, ModVersion, SearchHit, SearchPage};
 
 const BASE: &str = "https://api.curseforge.com/v1";
 
@@ -14,6 +14,14 @@ const BASE: &str = "https://api.curseforge.com/v1";
 struct SearchResponse {
     #[serde(default)]
     data: Vec<CfMod>,
+    #[serde(default)]
+    pagination: CfPagination,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct CfPagination {
+    #[serde(default, alias = "totalCount")]
+    total_count: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,7 +194,8 @@ pub fn search(
     category: &str,
     content_type: &str,
     limit: u32,
-) -> Result<Vec<SearchHit>, String> {
+    page: u32,
+) -> Result<SearchPage, String> {
     let mut url = Url::parse(&format!("{BASE}/mods/search")).map_err(|e| e.to_string())?;
     {
         let mut pairs = url.query_pairs_mut();
@@ -194,7 +203,7 @@ pub fn search(
         pairs.append_pair("classId", &crate::content_types::curseforge_class_id(content_type).to_string());
         pairs.append_pair("searchFilter", query);
         pairs.append_pair("pageSize", &limit.min(50).to_string());
-        pairs.append_pair("pageIndex", "1");
+        pairs.append_pair("pageIndex", &page.max(1).to_string());
         if !game_version.trim().is_empty() {
             pairs.append_pair("gameVersion", game_version.trim());
         }
@@ -205,12 +214,13 @@ pub fn search(
         }
     }
     let response: SearchResponse = crate::http::get_json_with_header(url.as_str(), "x-api-key", key)?;
+    let total = response.pagination.total_count;
     let mut hits: Vec<SearchHit> = response.data.iter().map(to_hit).collect();
     if !category.trim().is_empty() {
         let wanted = category.trim().to_ascii_lowercase();
         hits.retain(|hit| hit.categories.iter().any(|item| item.eq_ignore_ascii_case(&wanted)));
     }
-    Ok(hits)
+    Ok(SearchPage { hits, total })
 }
 
 pub fn resolve_file(
