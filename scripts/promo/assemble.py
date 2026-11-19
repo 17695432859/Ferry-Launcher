@@ -167,6 +167,7 @@ def build_outro():
         ("LittleSkin 外置登录 · 多角色切换", FONT, 30, "white@0.66", 672, 1.2),
         ("陶瓦 / EasyTier 联机 · 房间码即开即玩", FONT, 30, "white@0.66", 728, 1.3),
         ("v0.1.0", FONT, 24, "white@0.45", 900, 1.6),
+        ("https\\://github.com/17695432859/Ferry-Launcher", FONT, 30, "0x8FA6FF", 986, 1.8),
     ]
     filters = []
     for text, font, size, color, y, delay in lines:
