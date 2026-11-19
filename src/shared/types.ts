@@ -303,6 +303,25 @@ export interface ModSearchHit {
   latestVersion: string | null
 }
 
+/** 崩溃自动分析 */
+export interface CrashCause {
+  id: string
+  title: string
+  detail: string
+  fix: string
+  severity: 'high' | 'medium' | 'low'
+  evidence: string
+}
+
+export interface CrashReport {
+  crashed: boolean
+  exitCode: number
+  summary: string
+  causes: CrashCause[]
+  tail: string[]
+  sources: string[]
+}
+
 export interface ModInstallProgress {
   instanceId: string
   projectId: string

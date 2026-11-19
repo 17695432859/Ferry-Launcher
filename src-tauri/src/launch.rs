@@ -609,6 +609,7 @@ pub fn launch(
     let refresh_account = account_id.clone();
     let started = std::time::Instant::now();
     let exit_log = log_file.clone();
+    let game_dir_for_guard = game_dir.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_millis(800));
         let mut guard = guard_state.child.lock().unwrap();
@@ -633,6 +634,15 @@ pub fn launch(
                 *guard = None;
                 guard_state.running.store(false, Ordering::SeqCst);
                 emit_state(&app, "exited", format!("{code}"), Some(pid));
+                // 异常退出时立刻跑一次日志分析，界面直接弹结论，不用用户自己翻 latest.log
+                if code != 0 {
+                    let crash_app = app.clone();
+                    let crash_dir = game_dir_for_guard.clone();
+                    std::thread::spawn(move || {
+                        let report = crate::crash::analyze(&crash_dir.to_string_lossy(), code);
+                        let _ = crash_app.emit("crash:analysis", report);
+                    });
+                }
                 let app_state = app.state::<crate::store::AppState>();
                 let _ = crate::store::record_playtime(
                     &app_state,

@@ -39,6 +39,16 @@ struct CfMod {
     authors: Vec<CfAuthor>,
     #[serde(default)]
     latest_files: Vec<CfFile>,
+    #[serde(default)]
+    categories: Vec<CfCategory>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CfCategory {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    slug: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,6 +149,16 @@ fn to_hit(mod_: &CfMod) -> SearchHit {
             }
         }
     }
+    for category in &mod_.categories {
+        let name = if category.slug.is_empty() {
+            category.name.to_ascii_lowercase().replace(' ', "-")
+        } else {
+            category.slug.to_ascii_lowercase()
+        };
+        if !name.is_empty() && !categories.iter().any(|c| c == &name) {
+            categories.push(name);
+        }
+    }
     SearchHit {
         source: "curseforge".into(),
         project_id: mod_.id.to_string(),
@@ -163,25 +183,34 @@ pub fn search(
     query: &str,
     game_version: &str,
     loader: &str,
+    category: &str,
+    content_type: &str,
     limit: u32,
 ) -> Result<Vec<SearchHit>, String> {
     let mut url = Url::parse(&format!("{BASE}/mods/search")).map_err(|e| e.to_string())?;
     {
         let mut pairs = url.query_pairs_mut();
         pairs.append_pair("gameId", "432");
-        pairs.append_pair("classId", "6");
+        pairs.append_pair("classId", &crate::content_types::curseforge_class_id(content_type).to_string());
         pairs.append_pair("searchFilter", query);
         pairs.append_pair("pageSize", &limit.min(50).to_string());
         pairs.append_pair("pageIndex", "1");
         if !game_version.trim().is_empty() {
             pairs.append_pair("gameVersion", game_version.trim());
         }
-        if let Some(loader) = loader_type(loader) {
-            pairs.append_pair("modLoaderType", &loader.to_string());
+        if crate::content_types::uses_loader(content_type) {
+            if let Some(loader) = loader_type(loader) {
+                pairs.append_pair("modLoaderType", &loader.to_string());
+            }
         }
     }
     let response: SearchResponse = crate::http::get_json_with_header(url.as_str(), "x-api-key", key)?;
-    Ok(response.data.iter().map(to_hit).collect())
+    let mut hits: Vec<SearchHit> = response.data.iter().map(to_hit).collect();
+    if !category.trim().is_empty() {
+        let wanted = category.trim().to_ascii_lowercase();
+        hits.retain(|hit| hit.categories.iter().any(|item| item.eq_ignore_ascii_case(&wanted)));
+    }
+    Ok(hits)
 }
 
 pub fn resolve_file(
@@ -189,13 +218,20 @@ pub fn resolve_file(
     project_id: &str,
     game_version: &str,
     loader: &str,
+    content_type: &str,
 ) -> Result<(ModVersion, ModFile), String> {
-    let loader = loader_type(loader).ok_or("UNSUPPORTED_LOADER")?;
+    let loader = if crate::content_types::uses_loader(content_type) {
+        Some(loader_type(loader).ok_or("UNSUPPORTED_LOADER")?)
+    } else {
+        None
+    };
     let mut url = Url::parse(&format!("{BASE}/mods/{project_id}/files")).map_err(|e| e.to_string())?;
     {
         let mut pairs = url.query_pairs_mut();
         pairs.append_pair("gameVersion", game_version);
-        pairs.append_pair("modLoaderType", &loader.to_string());
+        if let Some(loader) = loader {
+            pairs.append_pair("modLoaderType", &loader.to_string());
+        }
         pairs.append_pair("pageSize", "50");
         pairs.append_pair("index", "0");
     }
@@ -205,9 +241,14 @@ pub fn resolve_file(
         .data
         .iter()
         .filter(|f| {
-            (f.game_versions.iter().any(|v| v == game_version))
-                && (f.mod_loaders.iter().any(|l| l.id == loader) || f.mod_loaders.is_empty())
-                && !f.is_alternate
+            let version_ok = game_version.is_empty()
+                || f.game_versions.iter().any(|v| v == game_version)
+                || f.game_versions.is_empty();
+            let loader_ok = match loader {
+                Some(id) => f.mod_loaders.iter().any(|l| l.id == id) || f.mod_loaders.is_empty(),
+                None => true,
+            };
+            version_ok && loader_ok && !f.is_alternate
         })
         .collect();
     candidates.sort_by(|a, b| {

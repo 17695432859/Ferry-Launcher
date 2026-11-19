@@ -143,6 +143,7 @@ fn export_writes_zip_without_touching_source() {
         version_id: Some("1.20.1-forge-47.2.0".into()),
         jvm_args: None,
         isolated: Some(true),
+        icon: None,
     };
 
     let target = root.join("out.zip");

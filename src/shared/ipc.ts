@@ -5,6 +5,7 @@ import type {
   ContentItem,
   ContentKind,
   ContentPreview,
+  CrashReport,
   DeviceCode,
   EasyTierConfig,
   Instance,
@@ -113,6 +114,26 @@ export interface ModImportOutcome {
   cancelled: boolean
 }
 
+export type DownloadContentType = 'mod' | 'modpack' | 'datapack' | 'resourcepack' | 'shader'
+
+/** 全局 Mod 搜索的筛选条件；留空表示不限 */
+export interface ModSearchOptions {
+  gameVersion?: string
+  loader?: string
+  source?: 'all' | 'curseforge' | 'modrinth'
+  category?: string
+  contentType?: DownloadContentType
+  limit?: number
+}
+
+/** 下载 Mod 时显式指定的兼容性参数；不传则沿用目标实例自身配置 */
+export interface ModDownloadOptions {
+  source?: 'curseforge' | 'modrinth'
+  gameVersion?: string
+  loader?: string
+  contentType?: DownloadContentType
+}
+
 /** 实例目录下可一键打开的子目录 */
 export type InstanceSubPath = '' | 'mods' | 'saves' | 'logs' | 'resourcepacks'
 
@@ -211,9 +232,15 @@ export interface FerryApi {
   checkModUpdates(id: string): Promise<ModUpdate[]>
   upgradeMod(id: string, key: string, url: string, fileName: string): Promise<ContentItem[]>
   searchMods(id: string, query: string, limit?: number): Promise<ModSearchHit[]>
-  downloadMod(id: string, projectId: string): Promise<ContentItem[]>
+  /** 全局 Mod 搜索，不绑定实例 */
+  searchModsGlobal(query: string, options?: ModSearchOptions): Promise<ModSearchHit[]>
+  downloadMod(id: string, projectId: string, options?: ModDownloadOptions): Promise<ContentItem[]>
   cancelModDownload(): Promise<void>
   onModInstallProgress(listener: (progress: ModInstallProgress) => void): () => void
+
+  /* ---- 崩溃分析 ---- */
+  analyzeCrash(id: string): Promise<CrashReport>
+  onCrashAnalysis(listener: (report: CrashReport) => void): () => void
 
   /* ---- 账户 ---- */
   accounts: {

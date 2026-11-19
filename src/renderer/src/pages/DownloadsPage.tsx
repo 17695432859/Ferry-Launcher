@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { InstallProgress, LoaderVersion, VersionSummary } from '@shared/types'
 import type { TranslationKey } from '@shared/i18n'
 import { useAppStore } from '@renderer/store/app-store'
+import { ModDownloadPanel } from './ModDownloadsPage'
 import { Icon } from '../components/Icon'
 import { Select } from '../components/Select'
 
@@ -35,6 +36,7 @@ export function DownloadsPage(): JSX.Element {
   const [filter, setFilter] = useState<'release' | 'snapshot' | 'all'>('release')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<VersionSummary | null>(null)
+  const [tab, setTab] = useState<'versions' | 'mods'>('versions')
 
   const [loader, setLoader] = useState<string>('vanilla')
   const [loaderVersion, setLoaderVersion] = useState('')
@@ -143,11 +145,35 @@ export function DownloadsPage(): JSX.Element {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-      <header className="mx-auto max-w-[1040px] px-1 pb-3">
+      <header className="mx-auto max-w-[1120px] px-1 pb-3">
         <h1 className="text-[19px] font-semibold tracking-tight text-1">{t('downloads.title')}</h1>
         <p className="mt-0.5 text-[12.5px] text-2">{t('downloads.subtitle')}</p>
+        <div className="mt-3 inline-flex items-center gap-0.5 rounded-lg bg-[var(--active-bg)] p-0.5">
+          {(['versions', 'mods'] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setTab(item)}
+              className={`relative rounded-[6px] px-3 py-1.5 text-[12px] transition-colors ${
+                tab === item ? 'text-1' : 'text-3 hover:text-2'
+              }`}
+            >
+              {tab === item && (
+                <motion.span
+                  layoutId="downloads-tab"
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  className="absolute inset-0 rounded-[6px] bg-[var(--panel)] shadow-sm"
+                />
+              )}
+              <span className="relative">{t(item === 'versions' ? 'downloads.tab.versions' : 'downloads.tab.mods')}</span>
+            </button>
+          ))}
+        </div>
       </header>
 
+      {tab === 'mods' ? (
+        <ModDownloadPanel />
+      ) : (
       <div className="mx-auto grid max-w-[1040px] grid-cols-[minmax(0,1fr)_300px] gap-3">
         {/* 版本列表 */}
         <div className="glass flex min-h-[420px] flex-col overflow-hidden rounded-panel">
@@ -348,6 +374,7 @@ export function DownloadsPage(): JSX.Element {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

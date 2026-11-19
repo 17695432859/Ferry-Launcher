@@ -13,10 +13,10 @@
 - **账户**：LittleSkin 外置登录、微软登录、离线账户。一个账户下的多个角色可以切换，令牌静默刷新，token 存系统凭据库。角色切换遇到 `Access token already has a profile assigned` 时会用凭据库里的密码重新换令牌。
 - **皮肤**：账户页有 3D 皮肤预览，支持 slim / classic 模型。
 - **内容管理**：按实例看 mod、存档、日志、资源包；能预览、启用/禁用、删除、导入、检查更新。mod 的元数据从 jar 内部读。
-- **Mod 下载**：在 Mod 面板里搜索并直接安装兼容当前版本/加载器的 mod。默认走 Modrinth；在设置里填入自己的 CurseForge API Key 后自动切到 CurseForge（密钥只存在本机，环境变量 `CURSEFORGE_API_KEY` 也可以）。
+- **资源下载**：「下载」页里有「游戏版本」和「Mod / 资源」两个标签。后者支持五类内容——Mod、整合包、数据包、资源包、光影包——可按名称、来源（CurseForge / Modrinth / 全部）、游戏版本、加载器和分类筛选，选中后指定目标实例一键安装，并实时显示下载进度。文件会落到对应的 `mods`、`modpacks`、`datapacks`、`resourcepacks`、`shaderpacks` 目录。CurseForge 需要在设置里填入自己的 API Key（密钥只存在本机，环境变量 `CURSEFORGE_API_KEY` 也可以）；留空则使用不需要密钥的 Modrinth。实例详情里的 Mod 面板仍保留一个快捷抽屉。
 - **联机**：陶瓦联机和 EasyTier 直连，房间码/联机码生成与解析。两个运行时都能在应用内下载安装。
 - **Java**：多线程扫描本机 Java（含 PCL 自带的 JRE），1.21+ 需要 Java 21 但没有时可以一键从清华镜像下载。启动前校验主版本，版本不对直接提示而不是闪退。
-- **启动**：拼完整 JVM 参数、SHA1 校验、并发下载、解压原生库、捕获日志；崩溃了给提示而不是无声退出。
+- **启动与崩溃分析**：拼完整 JVM 参数、SHA1 校验、并发下载、解压原生库、捕获日志。游戏异常退出时自动读 `ferry-latest.log` / `latest.log` / `crash-reports`，匹配 Java 版本、内存不足、缺前置、Mod 冲突、显卡驱动、存档损坏等十余种常见问题，直接给出原因和修复建议；也可以随时点启动按钮旁的「分析日志」手动分析。
 - **外观**：毛玻璃面板、主题深浅、强调色、模糊强度、背景动画、UI 缩放 90–125%、自定义背景图，全部持久化。中英双语。
 
 ## 技术栈
@@ -89,5 +89,5 @@ cargo test --release --test backend -j 2 --manifest-path src-tauri/Cargo.toml
 
 - 只做了 Windows x64；WebView2 需要系统自带或安装 Evergreen Runtime。
 - 微软账户走的是 XSTS 链路的一部分，复杂场景下可能还需要补 token 刷新逻辑。
-- Modrinth / CurseForge 的 mod 中心、M5 引导流程还没做完。
+- CurseForge 搜索需要用户自己的 API Key（官方不允许在分发软件里内置第三方 key）；M5 引导流程还没做完。
 - Win7 兼容未验证。

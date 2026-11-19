@@ -1,7 +1,8 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import type { FerryApi, NetplayInstallProgress } from '@shared/ipc'
+import type { FerryApi, ModDownloadOptions, ModSearchOptions, NetplayInstallProgress } from '@shared/ipc'
 import type {
+  CrashReport,
   InstallProgress,
   LaunchEvent,
   LaunchLog,
@@ -44,11 +45,40 @@ export function createTauriFerry(): FerryApi {
     checkModUpdates: (id) => invoke('content_updates', { id }),
     upgradeMod: (id, key, url, fileName) => invoke('content_upgrade', { id, key, url, fileName }),
     searchMods: (id, query, limit) => invoke('mod_search', { id, query, limit: limit ?? 20 }),
-    downloadMod: (id, projectId) => invoke('mod_download', { id, projectId }),
+    searchModsGlobal: (query, options?: ModSearchOptions) =>
+      invoke('mod_search_global', {
+        query,
+        gameVersion: options?.gameVersion ?? '',
+        loader: options?.loader ?? '',
+        source: options?.source ?? 'all',
+        category: options?.category ?? '',
+        contentType: options?.contentType ?? 'mod',
+        limit: options?.limit ?? 24
+      }),
+    downloadMod: (id, projectId, options?: ModDownloadOptions) =>
+      invoke('mod_download', {
+        id,
+        projectId,
+        source: options?.source ?? null,
+        gameVersion: options?.gameVersion ?? null,
+        loader: options?.loader ?? null,
+        contentType: options?.contentType ?? 'mod'
+      }),
     cancelModDownload: () => invoke('mod_download_cancel'),
     onModInstallProgress: (listener: (progress: ModInstallProgress) => void) => {
       let dispose: (() => void) | null = null
       void listen<ModInstallProgress>('mod:install-progress', (event) => listener(event.payload)).then(
+        (unlisten) => {
+          dispose = unlisten
+        }
+      )
+      return () => dispose?.()
+    },
+
+    analyzeCrash: (id) => invoke('crash_analyze', { id }),
+    onCrashAnalysis: (listener: (report: CrashReport) => void) => {
+      let dispose: (() => void) | null = null
+      void listen<CrashReport>('crash:analysis', (event) => listener(event.payload)).then(
         (unlisten) => {
           dispose = unlisten
         }

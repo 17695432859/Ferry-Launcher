@@ -89,19 +89,27 @@ fn json_array(values: &[String]) -> String {
     serde_json::to_string(values).unwrap_or_else(|_| "[]".into())
 }
 
-/// 搜索 mod。game_version / loader 传空字符串表示不筛选。
+/// 搜索内容。game_version / loader / category 传空字符串表示不筛选。
 pub fn search(
     query: &str,
     game_version: &str,
     loader: &str,
+    category: &str,
+    content_type: &str,
     limit: u32,
 ) -> Result<Vec<SearchHit>, String> {
-    let mut facets: Vec<Vec<String>> = vec![vec!["project_type:mod".into()]];
-    if let Some(loader) = normalize_loader(loader) {
-        facets.push(vec![format!("categories:{loader}")]);
+    let project_type = crate::content_types::modrinth_project_type(content_type);
+    let mut facets: Vec<Vec<String>> = vec![vec![format!("project_type:{project_type}")]];
+    if crate::content_types::uses_loader(content_type) {
+        if let Some(loader) = normalize_loader(loader) {
+            facets.push(vec![format!("categories:{loader}")]);
+        }
     }
     if !game_version.trim().is_empty() {
         facets.push(vec![format!("versions:{}", game_version.trim())]);
+    }
+    if !category.trim().is_empty() {
+        facets.push(vec![format!("categories:{}", category.trim())]);
     }
 
     let mut url = Url::parse(&format!("{BASE}/search")).map_err(|e| e.to_string())?;
@@ -120,9 +128,13 @@ pub fn resolve_file(
     project_id: &str,
     game_version: &str,
     loader: &str,
+    content_type: &str,
 ) -> Result<(ModVersion, ModFile), String> {
-    let loader = normalize_loader(loader).ok_or("UNSUPPORTED_LOADER")?;
-    let loaders = vec![loader.to_string()];
+    let loaders: Vec<String> = if crate::content_types::uses_loader(content_type) {
+        vec![normalize_loader(loader).ok_or("UNSUPPORTED_LOADER")?.to_string()]
+    } else {
+        Vec::new()
+    };
     let versions = vec![game_version.to_string()];
 
     let fetch = |releases_only: bool| -> Result<Vec<ModVersion>, String> {
@@ -130,7 +142,9 @@ pub fn resolve_file(
             .map_err(|e| e.to_string())?;
         {
             let mut pairs = url.query_pairs_mut();
-            pairs.append_pair("loaders", &json_array(&loaders));
+            if !loaders.is_empty() {
+                pairs.append_pair("loaders", &json_array(&loaders));
+            }
             pairs.append_pair("game_versions", &json_array(&versions));
             pairs.append_pair("limit", "10");
             if releases_only {

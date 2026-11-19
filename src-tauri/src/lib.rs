@@ -1,5 +1,7 @@
 pub mod auth;
 pub mod content;
+pub mod content_types;
+pub mod crash;
 pub mod curseforge;
 pub mod export;
 pub mod http;
@@ -510,9 +512,81 @@ fn mod_search(
     let query = query.trim();
     let limit = limit.unwrap_or(20).clamp(1, 50);
     if let Some(key) = curseforge_key(&state) {
-        return curseforge::search(&key, query, &instance.mc_version, &instance.loader, limit);
+        return curseforge::search(
+            &key,
+            query,
+            &instance.mc_version,
+            &instance.loader,
+            "",
+            "mod",
+            limit,
+        );
     }
-    modrinth::search(query, &instance.mc_version, &instance.loader, limit)
+    modrinth::search(query, &instance.mc_version, &instance.loader, "", "mod", limit)
+}
+
+/// 全局 Mod 搜索：不依赖任何实例，筛选条件由界面显式传入。
+/// source: all / curseforge / modrinth；category 为空表示不限类型。
+#[tauri::command(async)]
+fn mod_search_global(
+    state: State<'_, AppState>,
+    query: String,
+    game_version: Option<String>,
+    loader: Option<String>,
+    source: Option<String>,
+    category: Option<String>,
+    content_type: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<modrinth::SearchHit>, String> {
+    let query = query.trim();
+    let content_type = content_types::normalize(content_type.as_deref().unwrap_or("mod"));
+    let game_version = game_version.unwrap_or_default();
+    let loader = loader.unwrap_or_default();
+    let category = category.unwrap_or_default();
+    let source = source
+        .unwrap_or_else(|| "all".into())
+        .trim()
+        .to_ascii_lowercase();
+    let limit = limit.unwrap_or(24).clamp(1, 50);
+
+    let key = curseforge_key(&state);
+    if source == "curseforge" && key.is_none() {
+        return Err("NO_CURSEFORGE_KEY".into());
+    }
+
+    let use_curseforge = (source == "curseforge" || source == "all") && key.is_some();
+    let use_modrinth = source == "modrinth" || source == "all";
+
+    let mut hits: Vec<modrinth::SearchHit> = Vec::new();
+    if use_curseforge {
+        hits.extend(curseforge::search(
+            key.as_deref().unwrap_or(""),
+            query,
+            &game_version,
+            &loader,
+            category.trim(),
+            content_type,
+            limit,
+        )?);
+    }
+    if use_modrinth {
+        hits.extend(modrinth::search(
+            query,
+            &game_version,
+            &loader,
+            category.trim(),
+            content_type,
+            limit,
+        )?);
+    }
+
+    // 同时搜索两个来源时按下载量降序，避免某一来源固定霸占前面。
+    // 单来源时保留 API 原本的相关度排序。
+    if source == "all" {
+        hits.sort_by(|a, b| b.downloads.cmp(&a.downloads));
+    }
+    hits.truncate((limit as usize).saturating_mul(2));
+    Ok(hits)
 }
 
 #[tauri::command(async)]
@@ -522,9 +596,25 @@ fn mod_download(
     download_state: State<'_, ModDownloadState>,
     id: String,
     project_id: String,
+    source: Option<String>,
+    game_version: Option<String>,
+    loader: Option<String>,
+    content_type: Option<String>,
 ) -> Result<Vec<content::ContentItem>, String> {
     let instance = store::find_instance(&state, &id).ok_or("NOT_FOUND")?;
     let game_dir = store::dir_of(&instance);
+    let content_type = content_types::normalize(content_type.as_deref().unwrap_or("mod"));
+    // 全局下载页可以让用户选择目标版本/加载器；不传时沿用实例自身配置。
+    let game_version = game_version
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| instance.mc_version.clone());
+    let loader = loader
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| instance.loader.clone());
+    let source = source
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
     let emit = |phase: &str, received: u64, total: u64| {
         let _ = app.emit(
             "mod:install-progress",
@@ -539,17 +629,24 @@ fn mod_download(
     };
 
     emit("resolve", 0, 0);
-    let (version, file) = if let Some(key) = curseforge_key(&state) {
-        curseforge::resolve_file(&key, &project_id, &instance.mc_version, &instance.loader)?
+    let (version, file) = if source == "modrinth" {
+        modrinth::resolve_file(&project_id, &game_version, &loader, content_type)?
+    } else if source == "curseforge" {
+        let key = curseforge_key(&state).ok_or("NO_CURSEFORGE_KEY")?;
+        curseforge::resolve_file(&key, &project_id, &game_version, &loader, content_type)?
+    } else if let Some(key) = curseforge_key(&state) {
+        curseforge::resolve_file(&key, &project_id, &game_version, &loader, content_type)?
     } else {
-        modrinth::resolve_file(&project_id, &instance.mc_version, &instance.loader)?
+        modrinth::resolve_file(&project_id, &game_version, &loader, content_type)?
     };
     let file_name = std::path::Path::new(&file.filename)
         .file_name()
         .ok_or("BAD_FILENAME")?
         .to_string_lossy()
         .to_string();
-    let dest = mods::mods_dir(&game_dir).join(&file_name);
+    let dest_dir = std::path::Path::new(&game_dir).join(content_types::subdir(content_type));
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    let dest = dest_dir.join(&file_name);
 
     let cancel = Arc::new(AtomicBool::new(false));
     *download_state.cancel.lock().unwrap() = Some(cancel.clone());
@@ -583,7 +680,18 @@ fn mod_download(
 
     emit("done", 1, 1);
     let _ = version; // 版本信息留给以后做版本列表，当前下载完直接刷新列表
-    Ok(content::list(&game_dir, "mods"))
+    let kind = content_types::subdir(content_type);
+    Ok(if kind == "mods" || kind == "resourcepacks" {
+        content::list(&game_dir, kind)
+    } else {
+        Vec::new()
+    })
+}
+
+#[tauri::command]
+fn crash_analyze(state: State<'_, AppState>, id: String) -> Result<crash::Report, String> {
+    let instance = store::find_instance(&state, &id).ok_or("NOT_FOUND")?;
+    Ok(crash::analyze(&store::dir_of(&instance), 0))
 }
 
 #[tauri::command]
@@ -1123,8 +1231,10 @@ pub fn run() {
             mods_delete,
             mods_import,
             mod_search,
+            mod_search_global,
             mod_download,
             mod_download_cancel,
+            crash_analyze,
             instance_export,
             instance_pick_java,
             instance_icon_pick,

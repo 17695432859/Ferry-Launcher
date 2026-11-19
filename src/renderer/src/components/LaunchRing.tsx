@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { LaunchLog } from '@shared/types'
+import type { CrashReport, LaunchLog } from '@shared/types'
 import type { TranslationKey } from '@shared/i18n'
 import { useRafTween } from '@renderer/hooks/useRafTween'
 import { useAppStore } from '@renderer/store/app-store'
+import { CrashPanel } from './CrashPanel'
 import { Icon } from './Icon'
 
 type Phase = 'idle' | 'preflight' | 'launching' | 'running' | 'failed'
@@ -32,6 +33,9 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
   const [label, setLabel] = useState('')
   const [logs, setLogs] = useState<LaunchLog[]>([])
   const [showLog, setShowLog] = useState(false)
+  const [crashReport, setCrashReport] = useState<CrashReport | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [showCrash, setShowCrash] = useState(false)
   const { value, animateTo, reset } = useRafTween(420)
   const logRef = useRef<HTMLDivElement | null>(null)
 
@@ -51,6 +55,13 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
     const disposeLog = window.ferry.onLaunchLog((entry) => {
       setLogs((list) => (list.length > 400 ? [...list.slice(-400), entry] : [...list, entry]))
     })
+    // 后端在游戏异常退出时已经跑完分析，这里直接接结论并弹出来
+    const disposeCrash = window.ferry.onCrashAnalysis((report) => {
+      setCrashReport(report)
+      setAnalyzing(false)
+      setShowCrash(true)
+      if (report.crashed) notify('error', t('crash.auto'))
+    })
     void window.ferry.isLaunching().then((running) => {
       if (running) {
         setPhase('running')
@@ -60,6 +71,7 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
     return () => {
       disposeState()
       disposeLog()
+      disposeCrash()
     }
   }, [notify, t])
 
@@ -79,6 +91,8 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
     reset()
     setPhase('preflight')
     setLogs([])
+    setCrashReport(null)
+    setShowCrash(false)
 
     const steps = await window.ferry.preflightInstance(instanceId)
     if (steps.length === 0) {
@@ -132,6 +146,21 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
           ? label
           : t('home.launch')
 
+  const analyze = async (): Promise<void> => {
+    setShowLog(false)
+    setShowCrash(true)
+    setAnalyzing(true)
+    setCrashReport(null)
+    try {
+      const report = await window.ferry.analyzeCrash(instanceId)
+      setCrashReport(report)
+    } catch {
+      notify('error', t('crash.noReports'))
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
   return (
     <div className="relative flex items-center gap-1.5">
       <button
@@ -141,6 +170,14 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
         className="flex h-9 w-9 items-center justify-center rounded-lg text-3 transition-colors hover:bg-[var(--hover-bg)] hover:text-1"
       >
         <Icon name="list" size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={() => void analyze()}
+        title={t('crash.analyze')}
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-3 transition-colors hover:bg-[var(--hover-bg)] hover:text-1"
+      >
+        <Icon name="alert" size={14} />
       </button>
 
       <motion.button
@@ -211,6 +248,7 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
         <span className="relative whitespace-nowrap">{text}</span>
       </motion.button>
 
+      <CrashPanel report={crashReport} analyzing={analyzing} open={showCrash} onClose={() => setShowCrash(false)} />
       <AnimatePresence>
         {showLog && (
           <motion.div

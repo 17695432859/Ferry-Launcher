@@ -70,9 +70,12 @@ const api: FerryApi = {
   checkModUpdates: notInElectron,
   upgradeMod: notInElectron,
   searchMods: notInElectron,
+  searchModsGlobal: notInElectron,
   downloadMod: notInElectron,
   cancelModDownload: notInElectron,
   onModInstallProgress: () => noopUnsubscribe,
+  analyzeCrash: notInElectron,
+  onCrashAnalysis: () => noopUnsubscribe,
   accounts: {
     list: notInElectron,
     addOffline: notInElectron,
