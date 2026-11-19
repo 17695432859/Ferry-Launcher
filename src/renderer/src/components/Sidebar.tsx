@@ -51,7 +51,7 @@ export function Sidebar(): JSX.Element {
       ))}
 
       <div className="mt-auto px-1">
-        <p className="text-[11px] text-3">M1 · v0.1.0</p>
+        <p className="text-[11px] text-3">M1 · v0.1.2</p>
       </div>
     </nav>
   )

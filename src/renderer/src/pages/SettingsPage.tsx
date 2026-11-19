@@ -477,7 +477,7 @@ export function SettingsPage(): JSX.Element {
           <Row
             label={t('app.name')}
             hint={t('settings.aboutBody', {
-              version: info?.version ?? '0.1.0',
+              version: info?.version ?? '0.1.2',
               electron: info?.electron ?? '-',
               chrome: info?.chrome ?? '-'
             })}
