@@ -45,7 +45,7 @@ export function TitleBar(): JSX.Element {
         <FerryLogo size={22} />
         <span className="text-[13.5px] font-semibold tracking-tight text-1">Ferry Launcher</span>
         <span className="rounded-md border border-[var(--hairline)] bg-[var(--hover-bg)] px-1.5 py-px text-[11.5px] font-medium tnum text-3">
-          v{info?.version ?? '0.1.2'}
+          v{info?.version ?? '0.1.3'}
         </span>
       </div>
 

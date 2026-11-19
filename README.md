@@ -2,7 +2,7 @@
 
 一个给 Minecraft Java 版用的启动器。单个 exe，不用装运行库，双击就跑。
 
-当前版本 0.1.2，Windows x64，产物约 8.8 MB。
+当前版本 0.1.3，Windows x64，产物约 8.8 MB。
 
 仓库地址：https://github.com/17695432859/Ferry-Launcher （GitHub 仓库名不允许空格，使用 `Ferry-Launcher`）
 
@@ -26,7 +26,7 @@
 | 壳 | Tauri 2 + WebView2，无边框窗口，单文件 MSVC 静态链接 |
 | 渲染 | React 18 + TypeScript + Tailwind + Framer Motion + Zustand |
 | 后端 | Rust，命令白名单 IPC，严格 CSP，渲染层碰不到 Node / fs |
-| 打包 | `scripts/build-tauri.mjs`，产物 `dist/FerryLauncher-0.1.2.exe` |
+| 打包 | `scripts/build-tauri.mjs`，产物 `dist/FerryLauncher-0.1.3.exe` |
 
 旧 Electron 壳相关的脚本和配置还留在仓库里，但默认构建走 Tauri。
 
@@ -62,7 +62,7 @@ promo/              宣传片成片与配乐
 npm install
 npm run typecheck     # 类型检查
 npm run dev           # 开发模式（Vite + Tauri dev）
-npm run dist          # 打包单文件 exe → dist/FerryLauncher-0.1.2.exe
+npm run dist          # 打包单文件 exe → dist/FerryLauncher-0.1.3.exe
 ```
 
 `rust-toolchain.toml` 固定 `stable-x86_64-pc-windows-msvc`，`.cargo/config.toml` 开了 `+crt-static`，所以产物不依赖 VC 运行库。

@@ -85,8 +85,18 @@ const RULES: &[Rule] = &[
         detail: "LWJGL / OpenGL 无法初始化，常见于显卡驱动过旧或远程桌面环境。",
         fix: "更新显卡驱动；关闭其他占用显卡的程序；不要通过远程桌面启动游戏。",
         severity: "high",
-        test: |t| has_any(t, &["opengl", "lwjgl", "glfw", "failed to create window", "could not create", "native crash", "hs_err_pid"]),
-        evidence: "OpenGL",
+        // 正常启动日志里也有 LWJGL 版本号，所以只匹配真正的初始化失败
+        test: |t| has_any(t, &[
+            "failed to create window",
+            "glfw error",
+            "opengl error",
+            "no opengl context",
+            "unsupported gl version",
+            "opengl 未能初始化",
+            "pixel format",
+            "hs_err_pid",
+        ]),
+        evidence: "Failed to create window",
     },
     Rule {
         id: "missing-mod",
@@ -94,8 +104,8 @@ const RULES: &[Rule] = &[
         detail: "某个 Mod 依赖的库没有安装，或依赖版本不匹配。",
         fix: "按提示装上前 Modrinth / CurseForge 页面里写的前置，并确认加载器类型一致。",
         severity: "high",
-        test: |t| has_any(t, &["modloadingexception", "missing dependency", "dependency violation", "could not be resolved", "no mod present"]) ,
-        evidence: "ModLoadingException",
+        test: |t| has_any(t, &["modloadingexception", "missing dependency", "dependency violation", "could not be resolved", "no mod present", "incompatible mod set"]),
+        evidence: "Missing dependency",
     },
     Rule {
         id: "class-not-found",
@@ -121,8 +131,10 @@ const RULES: &[Rule] = &[
         detail: "Mod 声明支持的 game version 与当前实例不一致。",
         fix: "换一个支持当前游戏版本的 Mod 版本，或者给这个 Mod 单独建一个对应版本的实例。",
         severity: "medium",
-        test: |t| has_any(t, &["incompatible", "not compatible", "unsupported minecraft version", "wrong minecraft version"]),
-        evidence: "incompatible",
+        // 只用「明确指向版本号」的说法；泛化的 incompatible 常常是
+        // 前置缺失导致的 mod set 冲突，会把用户带到错误方向。
+        test: |t| has_any(t, &["unsupported minecraft version", "wrong minecraft version", "requires minecraft", "only supports minecraft"]),
+        evidence: "requires minecraft",
     },
     Rule {
         id: "auth",
@@ -148,7 +160,15 @@ const RULES: &[Rule] = &[
         detail: "Mod 的配置文件格式错误，加载时解析失败。",
         fix: "按报错提示找到 config 目录里对应的配置文件，先改名备份再启动，让 Mod 重新生成一份。",
         severity: "low",
-        test: |t| has_any(t, &["config", "parse error", "json syntax", "toml"]),
+        // 不能只匹配 "config"：几乎每份日志都会提到 config 目录
+        test: |t| has_any(t, &[
+            "failed to load config",
+            "could not parse config",
+            "config parse",
+            "malformed json",
+            "json syntax error",
+            "toml parse error",
+        ]),
         evidence: "config",
     },
 ];
@@ -288,5 +308,26 @@ mod tests {
     fn evidence_is_first_matching_line() {
         let text = "some header\nException in thread \"main\" java.lang.OutOfMemoryError: Java heap space\nmore lines";
         assert!(first_line_containing(text, "OutOfMemoryError").contains("OutOfMemoryError"));
+    }
+
+    #[test]
+    fn missing_dependency_keeps_evidence() {
+        let text = "[main/ERROR]: Missing dependency: fabric-api is required by sodium-extra";
+        let rule = RULES.iter().find(|r| r.id == "missing-mod").unwrap();
+        assert!((rule.test)(text));
+        assert!(!first_line_containing(text, rule.evidence).is_empty());
+    }
+
+    #[test]
+    fn normal_launch_log_is_quiet() {
+        // 正常日志里一定会有 LWJGL 版本、config 目录、认证主机等字样，
+        // 这些都不该被当成崩溃原因。
+        let text = "Backend library: LWJGL version 3.3.1+37\n\
+Loading config from config/foo.toml\n\
+Environment: authHost='https://authserver.mojang.com'\n\
+[Render thread/INFO]: OpenGL debug message: usage hint\n\
+[main/INFO]: Loaded 148 recipes";
+        let hit: Vec<&str> = RULES.iter().filter(|r| (r.test)(text)).map(|r| r.id).collect();
+        assert!(hit.is_empty(), "误报: {hit:?}");
     }
 }

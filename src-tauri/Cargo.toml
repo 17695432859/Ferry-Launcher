@@ -1,6 +1,6 @@
 [package]
 name = "ferry-launcher"
-version = "0.1.2"
+version = "0.1.3"
 description = "Ferry Launcher"
 authors = ["Ferry Launcher"]
 edition = "2021"
