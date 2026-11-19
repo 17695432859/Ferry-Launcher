@@ -1,0 +1,358 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   设计令牌：主题只改这里，组件不写死颜色
+   ========================================================================== */
+@layer base {
+  :root {
+    --accent: #4c6fff;
+    --accent-rgb: 76 111 255;
+    --accent-ink: #ffffff;
+    --glass-blur: 24px;
+    --noise-opacity: 0.04;
+    --ui-scale: 1;
+    --radius-panel: 16px;
+    --radius-card: 20px;
+    --dur-fast: 120ms;
+    --dur-base: 220ms;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+    color-scheme: dark;
+  }
+
+  :root[data-theme='dark'] {
+    --bg-0: #0a0b0e;
+    --bg-1: #101216;
+    --bg-2: #131519;
+
+    --panel-bg: rgba(255, 255, 255, 0.075);
+    --panel-bg-strong: rgba(255, 255, 255, 0.115);
+    --panel-border: rgba(255, 255, 255, 0.14);
+    --panel-solid: #15171c;
+    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.38);
+
+    --text-1: #f4f5f7;
+    --text-2: rgba(244, 245, 247, 0.68);
+    --text-3: rgba(244, 245, 247, 0.44);
+
+    --cover-scrim: rgba(10, 14, 24, 0.72);
+    --hairline: rgba(255, 255, 255, 0.08);
+    --hover-bg: rgba(255, 255, 255, 0.06);
+    --active-bg: rgba(255, 255, 255, 0.1);
+
+    color-scheme: dark;
+  }
+
+  :root[data-theme='light'] {
+    --bg-0: #eceef2;
+    --bg-1: #f3f4f7;
+    --bg-2: #f8f9fb;
+
+    --panel-bg: rgba(255, 255, 255, 0.62);
+    --panel-bg-strong: rgba(255, 255, 255, 0.86);
+    --panel-border: rgba(255, 255, 255, 0.92);
+    --panel-solid: #f7f8fa;
+    --panel-shadow: 0 8px 24px rgba(16, 24, 40, 0.09);
+
+    --text-1: #14161a;
+    --text-2: rgba(20, 22, 26, 0.66);
+    --text-3: rgba(20, 22, 26, 0.46);
+
+    --cover-scrim: rgba(246, 249, 255, 0.78);
+    --hairline: rgba(11, 17, 32, 0.08);
+    --hover-bg: rgba(11, 17, 32, 0.05);
+    --active-bg: rgba(11, 17, 32, 0.08);
+
+    color-scheme: light;
+  }
+
+  /*
+    自定义背景是一张照片，亮度完全不可控。8% 白的玻璃压上去，
+    正文对比度会掉到 3:1 以下，所以这种模式下把面板底换成更实的一档：
+    照片还看得见（保留玻璃感），但字一定读得清。
+  */
+  :root[data-photo='1'][data-theme='dark'] {
+    --panel-bg: rgba(14, 16, 21, 0.62);
+    --panel-bg-strong: rgba(18, 20, 26, 0.82);
+    --panel-border: rgba(255, 255, 255, 0.12);
+    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    --hover-bg: rgba(255, 255, 255, 0.07);
+    --active-bg: rgba(255, 255, 255, 0.11);
+  }
+
+  :root[data-photo='1'][data-theme='light'] {
+    --panel-bg: rgba(255, 255, 255, 0.8);
+    --panel-bg-strong: rgba(255, 255, 255, 0.93);
+    --panel-border: rgba(255, 255, 255, 0.95);
+  }
+
+  * {
+    border-color: var(--hairline);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    background: var(--bg-0);
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Inter Variable', 'Inter', -apple-system, 'Segoe UI', 'Microsoft YaHei UI',
+      'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans CJK SC', sans-serif;
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
+    letter-spacing: 0.005em;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-1);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    user-select: none;
+    cursor: default;
+  }
+
+  #root {
+    zoom: var(--ui-scale);
+    isolation: isolate;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--text-1);
+  }
+
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 80%, white 20%);
+    outline-offset: 2px;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-3) 45%, transparent);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--text-2) 60%, transparent);
+    background-clip: content-box;
+  }
+}
+
+/* ==========================================================================
+   背景：纯色平铺。开关打开时两层纯色极慢交替，不产生任何渐变
+   ========================================================================== */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--bg-0);
+}
+
+.app-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--bg-2);
+  opacity: 0;
+}
+
+.app-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ==========================================================================
+   毛玻璃：严格按规范 —— 24px / 180% 饱和 / 1px 内描边 / 外阴影 / 噪点 ≤4%
+   ========================================================================== */
+@layer components {
+  .glass {
+    position: relative;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--panel-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  }
+
+  .glass-card {
+    border-radius: var(--radius-card);
+  }
+
+  /* 噪点叠加，避免大面积模糊发灰 */
+  .glass::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: var(--noise-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+  }
+
+  /* 不支持 backdrop-filter 时退化为不透明面板，保证可读性 */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: var(--panel-solid);
+    }
+  }
+
+  .glass-strong {
+    background: var(--panel-bg-strong);
+  }
+
+  .hairline {
+    border-color: var(--hairline);
+  }
+
+  /* 表单输入：玻璃面板里用半透明底，聚焦时描边强调色 */
+  .input {
+    height: 34px;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--hairline);
+    background: var(--hover-bg);
+    padding: 0 10px;
+    font-size: 13px;
+    color: var(--text-1);
+    outline: none;
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .input::placeholder {
+    color: var(--text-3);
+  }
+
+  .input:focus {
+    border-color: rgb(var(--accent-rgb) / 0.55);
+    background: var(--active-bg);
+  }
+
+  .input:disabled {
+    opacity: 0.55;
+  }
+}
+
+@layer utilities {
+  .drag {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .text-1 {
+    color: var(--text-1);
+  }
+
+  .text-2 {
+    color: var(--text-2);
+  }
+
+  .text-3 {
+    color: var(--text-3);
+  }
+
+  .accent-text {
+    color: var(--accent);
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   动效降级：prefers-reduced-motion 下只剩淡入淡出
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   表单控件：滑杆与开关统一走强调色
+   ========================================================================== */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track-fill, color-mix(in srgb, var(--text-3) 35%, transparent));
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 2px solid var(--bg-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  transition: box-shadow 160ms var(--ease-out);
+}
+
+.slider:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  transition: transform 160ms var(--ease-out), border-color 160ms var(--ease-out);
+}
+
+.swatch:hover {
+  transform: scale(1.08);
+}

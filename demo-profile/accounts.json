@@ -1,0 +1,47 @@
+[
+  {
+    "id": "ys-demo-littleskin",
+    "kind": "littleskin",
+    "sourceName": "LittleSkin",
+    "apiRoot": "https://littleskin.cn/api/yggdrasil",
+    "profileName": "Ferry_01",
+    "uuid": "8f2a41c6d7e94b0fa3c58d1e6b7a2904",
+    "skinUrl": "https://crafatar.com/skins/069a79f444e94726a5befca90e38aaf5",
+    "capeUrl": null,
+    "skinModel": "classic",
+    "accessToken": null,
+    "clientToken": null,
+    "refreshToken": null,
+    "userName": "ferry_demo",
+    "profiles": [
+      {
+        "id": "8f2a41c6d7e94b0fa3c58d1e6b7a2904",
+        "name": "Ferry_01"
+      },
+      {
+        "id": "1c7d9e3b45a24f6c8b0d2e5a7c9f1038",
+        "name": "Ferry_Redstone"
+      },
+      {
+        "id": "5b6e2f8a1c3d47e9a0b5c8d2e4f6172b",
+        "name": "Ferry_Builder"
+      }
+    ]
+  },
+  {
+    "id": "off-demo-local",
+    "kind": "offline",
+    "sourceName": "离线账户",
+    "apiRoot": null,
+    "profileName": "Steve",
+    "uuid": "00000000000000000000000000000000",
+    "skinUrl": null,
+    "capeUrl": null,
+    "skinModel": null,
+    "accessToken": null,
+    "clientToken": null,
+    "refreshToken": null,
+    "userName": null,
+    "profiles": []
+  }
+]

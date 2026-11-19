@@ -1,0 +1,16 @@
+{
+  "theme": "dark",
+  "accent": "#4c6fff",
+  "blur": 28,
+  "backgroundAnimation": true,
+  "backgroundMode": "custom",
+  "backgroundPath": "C:\\Users\\17694\\WorkBuddy AI\\spaces\\2026_11_18_21-42-52\\demo-profile\\backgrounds\\bg.jpg",
+  "backgroundDim": 42,
+  "uiScale": 100,
+  "downloadSource": "official",
+  "defaultMemoryMb": 8192,
+  "locale": "zh-CN",
+  "lastAccountId": "ys-demo-littleskin",
+  "onboardingDone": true,
+  "defaultJavaPath": "C:\\Program Files\\Java\\jdk-17.0.19\\bin\\java.exe"
+}

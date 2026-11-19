@@ -1,0 +1,59 @@
+appId: cn.ferry.launcher
+icon: build/icon.png
+productName: Ferry Launcher
+copyright: Copyright © 2026 Ferry Launcher
+
+directories:
+  buildResources: build
+  output: dist
+
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/{.eslintrc,.editorconfig,tsconfig*.json}'
+
+asar: true
+# 只保留中英文，locales 目录从 49MB 降到 2MB
+electronLanguages:
+  - zh-CN
+  - en-US
+compression: maximum
+removePackageScripts: true
+
+# 主产物：单文件绿色版（用户侧零安装、无附属运行库）
+# 次产物：NSIS 安装版
+win:
+  target:
+    - target: portable
+      arch: [x64]
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}-${env.BUILD_TARGET}.${ext}
+  requestedExecutionLevel: asInvoker
+
+portable:
+  artifactName: FerryLauncher-${version}-portable.exe
+  unpackDirName: FerryLauncher
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Ferry Launcher
+  artifactName: FerryLauncher-${version}-setup.exe
+
+mac:
+  category: public.app-category.games
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+
+linux:
+  category: Game
+  target:
+    - target: AppImage
+      arch: [x64]

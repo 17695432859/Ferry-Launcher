@@ -1,0 +1,54 @@
+{
+  "started_at": 438577.6534122,
+  "offset": 1.441,
+  "marks": [
+    {
+      "t": 1.0,
+      "label": "intro"
+    },
+    {
+      "t": 4.6,
+      "label": "cards"
+    },
+    {
+      "t": 15.001,
+      "label": "content"
+    },
+    {
+      "t": 22.801,
+      "label": "content-end"
+    },
+    {
+      "t": 26.0,
+      "label": "accounts"
+    },
+    {
+      "t": 33.201,
+      "label": "netplay"
+    },
+    {
+      "t": 39.801,
+      "label": "settings"
+    },
+    {
+      "t": 51.6,
+      "label": "settings-end"
+    },
+    {
+      "t": 52.001,
+      "label": "download"
+    },
+    {
+      "t": 59.4,
+      "label": "download-end"
+    },
+    {
+      "t": 59.801,
+      "label": "finale"
+    },
+    {
+      "t": 65.201,
+      "label": "end"
+    }
+  ]
+}

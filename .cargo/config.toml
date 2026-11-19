@@ -1,0 +1,7 @@
+# 静态链接 MSVC 运行库（CRT）。
+#
+# 不加这个，exe 会带一堆 api-ms-win-crt-*.dll 的导入，需要系统装过 UCRT
+# （Win10+ 自带，Win7 得另装 KB2999226）。静态链接后 exe 只依赖 Windows
+# 自己的 kernel32 / user32 / ole32 这些，真正做到「一个文件拷过去就能跑」。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

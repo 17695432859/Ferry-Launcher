@@ -1,0 +1,14 @@
+node_modules/
+out/
+build/
+.tmp-rust/
+.workbuddy-ai/
+shots/
+src-tauri/target/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# 只保留最终交付的单文件 exe，排除 electron 旧产物和构建中间目录
+dist/*
+!dist/FerryLauncher-0.1.0.exe
