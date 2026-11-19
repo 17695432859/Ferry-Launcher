@@ -1,0 +1,10 @@
+# 固定用 MSVC 工具链编译。
+#
+# 为什么不用 windows-gnu：
+#   - gnu 目标不带 dlltool，某些 crate 的 build script 生成不了导入库；
+#   - 更关键的是 webview2-com-sys 在非 msvc 下只能动态链接 WebView2Loader.dll，
+#     打出来的 exe 旁边必须跟着一个 160KB 的 dll，就不是单文件了。
+# MSVC 下 WebView2Loader 走静态库，产物是真正的单文件。
+[toolchain]
+channel = "stable-x86_64-pc-windows-msvc"
+profile = "minimal"
