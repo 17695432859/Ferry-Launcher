@@ -382,6 +382,8 @@ export interface JavaInfo {
   major: number
   vendor: string
   arch: string
+  /** 从哪儿发现的：env / registry / jdk / path / minecraft / runtime */
+  source: string
 }
 
 export interface LaunchEvent {

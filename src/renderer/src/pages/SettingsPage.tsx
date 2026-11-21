@@ -10,8 +10,19 @@ import {
   type AppSettings,
   type JavaInfo
 } from '@shared/types'
+import type { TranslationKey } from '@shared/i18n'
 import { useAppStore } from '@renderer/store/app-store'
 import { Icon } from '@renderer/components/Icon'
+
+/** 后端给每个 Java 标了来源，这里翻译成能看懂的标签 */
+const JAVA_SOURCE_LABEL: Record<string, TranslationKey> = {
+  env: 'settings.javaSource.env',
+  registry: 'settings.javaSource.registry',
+  jdk: 'settings.javaSource.jdk',
+  path: 'settings.javaSource.path',
+  minecraft: 'settings.javaSource.minecraft',
+  runtime: 'settings.javaSource.runtime'
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (
@@ -168,10 +179,11 @@ export function SettingsPage(): JSX.Element {
       const list = await window.ferry.detectJava()
       setFound(list)
       setScanned(true)
-      // 还没设过默认值就顺手选一个最合适的
-      if (!settings.defaultJavaPath && list.length > 0) {
-        await patch({ defaultJavaPath: list[0].path })
-      }
+      // 这里刻意不改 defaultJavaPath：
+      // 「自动选择」是按每个实例的 MC 版本挑最合适的 Java，
+      // 扫描只是给人看的。要是顺手把默认值钉到列表第一项，
+      // 而列表又是按版本从高到低排的，
+      // 结果就是点一下搜索，默认 Java 却被静默换成最新的那个。
     } finally {
       setScanning(false)
     }
@@ -448,7 +460,17 @@ export function SettingsPage(): JSX.Element {
                       <span className="w-[52px] shrink-0 text-[12px] font-medium text-1">
                         {item.major > 0 ? `Java ${item.major}` : t('settings.javaUnknown')}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-3">{item.path}</span>
+                      {item.source && (
+                        <span
+                          className="shrink-0 rounded border border-[var(--hairline)] px-1.5 py-px text-[10px] text-3"
+                          title={t('settings.javaSource.hint')}
+                        >
+                          {t(JAVA_SOURCE_LABEL[item.source] ?? 'settings.javaUnknown')}
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-3" title={item.path}>
+                        {item.path}
+                      </span>
                       {item.arch && <span className="shrink-0 text-[11px] text-3">{item.arch}</span>}
                       {active && <Icon name="check" size={12} className="shrink-0 accent-text" />}
                     </button>
@@ -477,7 +499,7 @@ export function SettingsPage(): JSX.Element {
           <Row
             label={t('app.name')}
             hint={t('settings.aboutBody', {
-              version: info?.version ?? '0.1.3',
+              version: info?.version ?? '0.1.4',
               electron: info?.electron ?? '-',
               chrome: info?.chrome ?? '-'
             })}

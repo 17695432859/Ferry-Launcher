@@ -1,8 +1,19 @@
 //! 本机 Java 探测。
 //!
-//! 不查注册表（环境里 reg.exe 可能被拦，而且注册表里的路径经常是残留），
-//! 直接扫常见安装目录 + PATH + JAVA_HOME，再用 `java -XshowSettings:properties -version`
-//! 读真实版本号。慢一点，但结果可信。
+//! 探测顺序（谁先命中用谁）：
+//! 1. `JAVA_HOME` 环境变量
+//! 2. 注册表 `HKLM/HKCU\SOFTWARE\JavaSoft\*`（Java 官方安装器登记的位置）
+//! 3. 常见安装容器目录：`C:\Program Files`、`%LOCALAPPDATA%\Programs`、
+//!    `%USERPROFILE%\.jdks`、`.gradle\jdks`、`scoop\apps`……
+//! 4. 启动器自己下载的运行时（`%APPDATA%\ferry-launcher\runtime`）
+//! 5. 官方 Minecraft 启动器的运行时（`%APPDATA%\.minecraft\runtime`）
+//! 6. 各盘根目录（`D:\jdk21`、`D:\桌面\xxx\jdk` 这种不好归类的位置）
+//! 7. 系统 `PATH`
+//!
+//! 注册表通过 `winreg` 直接调 Win32 API，不依赖 `reg.exe`——
+//! 后者在很多受限环境里会被安全策略拦掉。
+//!
+//! 版本号优先读 JDK 根目录下的 `release` 文件，读不到再起一次 JVM 问它自己。
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -20,7 +31,17 @@ pub struct JavaInfo {
     pub major: u32,
     pub vendor: String,
     pub arch: String,
+    /// 从哪儿发现的，用来在设置页标明来源
+    pub source: String,
 }
+
+/// 来源的稳定标识，前端按这个翻译
+pub const SOURCE_ENV: &str = "env";
+pub const SOURCE_REGISTRY: &str = "registry";
+pub const SOURCE_JDK: &str = "jdk";
+pub const SOURCE_PATH: &str = "path";
+pub const SOURCE_MINECRAFT: &str = "minecraft";
+pub const SOURCE_RUNTIME: &str = "runtime";
 
 fn java_exe(home: &Path) -> PathBuf {
     if cfg!(windows) {
@@ -30,12 +51,61 @@ fn java_exe(home: &Path) -> PathBuf {
     }
 }
 
-/// 用 java 自己报出来的属性判断版本，比解析路径可靠
-pub fn probe(path: &Path) -> Option<JavaInfo> {
-    if !path.is_file() {
+/// 从版本串里取主版本号：21.0.7 → 21，1.8.0_392 → 8
+fn major_of(version: &str) -> u32 {
+    let first = version
+        .split(['.', '_', '-'])
+        .next()
+        .and_then(|part| part.parse::<u32>().ok())
+        .unwrap_or(0);
+    if first == 1 {
+        // 1.8.0_392 → 8
+        return version
+            .split('.')
+            .nth(1)
+            .and_then(|part| part.parse::<u32>().ok())
+            .unwrap_or(8);
+    }
+    first
+}
+
+/// JDK 根目录下的 release 文件带版本号，不用起 JVM 就能读到
+fn read_release(root: &Path) -> Option<(String, String, String)> {
+    let text = std::fs::read_to_string(root.join("release")).ok()?;
+    let mut version = String::new();
+    let mut vendor = String::new();
+    let mut arch = String::new();
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let value = value.trim().trim_matches('"').to_string();
+        match key.trim() {
+            "JAVA_VERSION" => version = value,
+            "IMPLEMENTOR" if vendor.is_empty() => vendor = value,
+            "OS_ARCH" => arch = value,
+            _ => {}
+        }
+    }
+    if version.is_empty() {
         return None;
     }
-    let output = Command::new(path)
+    Some((version, vendor, normalize_arch(&arch)))
+}
+
+/// release 里写的是 x86_64，JVM 自己报的是 amd64，统一一下
+fn normalize_arch(arch: &str) -> String {
+    match arch {
+        "x86_64" | "x64" | "amd64" => "amd64".to_string(),
+        "aarch64" | "arm64" => "aarch64".to_string(),
+        "x86" | "i386" | "i686" => "x86".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// 起一次 JVM，问它自己的版本（release 文件读不到时的兜底）
+fn probe_jvm(exe: &Path, source: &str) -> Option<JavaInfo> {
+    let output = Command::new(exe)
         .arg("-XshowSettings:properties")
         .arg("-version")
         .output()
@@ -71,87 +141,265 @@ pub fn probe(path: &Path) -> Option<JavaInfo> {
         return None;
     }
 
-    let major = version
-        .split(['.', '_', '-'])
-        .next()
-        .and_then(|first| first.parse::<u32>().ok())
-        .map(|first| if first == 1 { 0 } else { first })
-        .unwrap_or(0);
-    let major = if major == 0 {
-        // 1.8.0_392 → 8
-        version
-            .split('.')
-            .nth(1)
-            .and_then(|second| second.parse::<u32>().ok())
-            .unwrap_or(8)
-    } else {
-        major
-    };
-
     Some(JavaInfo {
-        path: path.to_string_lossy().to_string(),
+        path: exe.to_string_lossy().to_string(),
+        major: major_of(&version),
         version,
-        major,
         vendor,
-        arch,
+        arch: normalize_arch(&arch),
+        source: source.to_string(),
     })
 }
 
-/// 可能装着 java 的目录。宁可多列，探测是并行的，多扫几个几乎不花时间。
-fn candidate_roots(game_dirs: &[String]) -> Vec<PathBuf> {
-    let mut roots: Vec<PathBuf> = Vec::new();
-    if let Ok(home) = std::env::var("JAVA_HOME") {
-        roots.push(PathBuf::from(home));
+/// 探测一个 java 可执行文件。优先读 release 文件，读不到再起 JVM。
+pub fn probe(path: &Path) -> Option<JavaInfo> {
+    probe_at(path, SOURCE_JDK)
+}
+
+pub fn probe_at(exe: &Path, source: &str) -> Option<JavaInfo> {
+    if !exe.is_file() {
+        return None;
     }
+    if let Some(root) = exe.parent().and_then(|parent| parent.parent()) {
+        if let Some((version, vendor, arch)) = read_release(root) {
+            return Some(JavaInfo {
+                path: exe.to_string_lossy().to_string(),
+                major: major_of(&version),
+                version,
+                vendor,
+                arch,
+                source: source.to_string(),
+            });
+        }
+    }
+    probe_jvm(exe, source)
+}
 
-    let looks_java = |path: &Path| -> bool {
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-        [
-            "java", "jdk", "jre", "zulu", "corretto", "temurin", "graal", "semeru", "bellsoft",
-            "adoptium", "microsoft", "openjdk", "liberica", "dragonwell",
-        ]
-        .iter()
-        .any(|key| name.contains(key))
+/* ==========================================================================
+   目录扫描
+   ========================================================================== */
+
+/// 目录名里带这些词的，多半是 JDK / JRE
+fn looks_java(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|value| value.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    [
+        "java",
+        "jdk",
+        "jre",
+        "zulu",
+        "corretto",
+        "temurin",
+        "graal",
+        "semeru",
+        "bellsoft",
+        "adoptium",
+        "adoptopenjdk",
+        "openjdk",
+        "liberica",
+        "dragonwell",
+        "jetbrains",
+        "microsoft",
+    ]
+    .iter()
+    .any(|key| name.contains(key))
+}
+
+/// 明显不是 Java 安装位置的目录，扫的时候直接跳过，省时间
+fn is_junk_dir(name: &str) -> bool {
+    matches!(
+        name,
+        "$recycle.bin"
+            | "system volume information"
+            | "windows"
+            | "windows.old"
+            | "recovery"
+            | "$winreagent"
+            | "driverstore"
+            | "perflogs"
+            | "node_modules"
+            | ".git"
+            | ".svn"
+            | "packages"
+            | "windowsapps"
+            | "temp"
+            | "tmp"
+            | "crashpad"
+            | "gpucache"
+            | "idle"
+            | "systray"
+            | "users"
+            | "program files"
+            | "program files (x86)"
+            | "programdata"
+    )
+}
+
+/// 单个容器目录最多看多少个子目录，防止在超大目录上卡死
+const WALK_BUDGET: usize = 8000;
+
+/// 在 root 往下最多 depth 层，找 `bin/java(.exe)`。
+/// 命中一个 JDK 根目录就不再往里钻（JDK 里面不会再有别的 JDK）。
+fn walk_java_exes(root: &Path, depth: usize, budget: &mut usize, out: &mut Vec<PathBuf>) {
+    if depth <= 0 || *budget == 0 {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
     };
+    for entry in entries.flatten() {
+        if *budget == 0 {
+            return;
+        }
+        *budget -= 1;
+        let path = entry.path();
+        // file_type 走目录句柄里已有的信息，不额外发起 stat；
+        // 但符号链接 / 目录联接在 Windows 上会被标成「不是目录」，
+        // 这里得跟一下，否则用联接指过去的 JDK 会被整片漏掉。
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        let is_dir = if file_type.is_symlink() {
+            path.is_dir()
+        } else {
+            file_type.is_dir()
+        };
+        if !is_dir {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        if is_junk_dir(&name) {
+            continue;
+        }
+        let path = entry.path();
+        let exe = java_exe(&path);
+        if exe.is_file() {
+            out.push(exe);
+            continue;
+        }
+        walk_java_exes(&path, depth - 1, budget, out);
+    }
+}
 
-    // 常见 vendor 根目录下钻一层
-    #[cfg(windows)]
-    {
-        let mut bases: Vec<PathBuf> = [
-            r"C:/Program Files",
-            r"C:/Program Files (x86)",
-            r"C:/ProgramData/Oracle/Java",
-            r"C:/Program Files/Common Files/Oracle/Java",
-        ]
-        .iter()
-        .map(PathBuf::from)
-        .collect();
-        if let Ok(local) = std::env::var("LOCALAPPDATA") {
-            bases.push(PathBuf::from(&local).join("Programs"));
-            bases.push(PathBuf::from(&local).join("Java"));
+/// 注册表里登记的 Java 安装位置（Java 官方安装器 / 部分 IDE 会写）
+#[cfg(windows)]
+fn registry_java_roots() -> Vec<PathBuf> {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    use winreg::RegKey;
+
+    let mut roots: Vec<PathBuf> = Vec::new();
+    let local = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let user = RegKey::predef(HKEY_CURRENT_USER);
+
+    for subkey in [
+        r"SOFTWARE\JavaSoft\JDK",
+        r"SOFTWARE\JavaSoft\Java Runtime Environment",
+        r"SOFTWARE\JavaSoft\Java Development Kit",
+        r"SOFTWARE\WOW6432Node\JavaSoft\JDK",
+        r"SOFTWARE\WOW6432Node\JavaSoft\Java Runtime Environment",
+        r"SOFTWARE\WOW6432Node\JavaSoft\Java Development Kit",
+    ] {
+        collect_java_home(&local, subkey, &mut roots);
+    }
+    for subkey in [
+        r"SOFTWARE\JavaSoft\Java Development Kit",
+        r"SOFTWARE\JavaSoft\JDK",
+    ] {
+        collect_java_home(&user, subkey, &mut roots);
+    }
+    roots
+}
+
+#[cfg(windows)]
+fn collect_java_home(hive: &winreg::RegKey, subkey: &str, roots: &mut Vec<PathBuf>) {
+    let Ok(key) = hive.open_subkey(subkey) else {
+        return;
+    };
+    for name in key.enum_keys().flatten() {
+        let Ok(sub) = key.open_subkey(&name) else {
+            continue;
+        };
+        if let Ok(home) = sub.get_value::<String, _>("JavaHome") {
+            roots.push(PathBuf::from(home));
         }
-        if let Ok(profile) = std::env::var("USERPROFILE") {
-            bases.push(PathBuf::from(&profile).join(".jdks"));
-            bases.push(PathBuf::from(&profile).join("scoop").join("apps"));
-        }
-        for base in bases {
-            let Ok(entries) = std::fs::read_dir(&base) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() && looks_java(&path) {
-                    roots.push(path);
-                }
+    }
+    // 老的 JRE 只登记一个 CurrentVersion
+    if let Ok(current) = key.get_value::<String, _>("CurrentVersion") {
+        if let Ok(sub) = key.open_subkey(&current) {
+            if let Ok(home) = sub.get_value::<String, _>("JavaHome") {
+                roots.push(PathBuf::from(home));
             }
         }
     }
+}
 
-    // 整合包目录旁边经常躺着启动器自带的 JRE（比如 D:/PCL/java17），
-    // 往上翻几层，把兄弟目录里带 java / jdk 字样的都收进来
+/// 需要往下钻的容器目录：(路径, 来源, 深度)
+fn scan_containers(game_dirs: &[String]) -> Vec<(PathBuf, &'static str, usize)> {
+    let mut list: Vec<(PathBuf, &'static str, usize)> = Vec::new();
+
+    // 启动器自己下载的运行时
+    list.push((crate::util::data_dir().join("runtime"), SOURCE_RUNTIME, 2));
+
+    // 官方 Minecraft 启动器的运行时——很多人的 Java 21 就躺在这
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        list.push((
+            PathBuf::from(&appdata).join(".minecraft").join("runtime"),
+            SOURCE_MINECRAFT,
+            2,
+        ));
+    }
+
+    #[cfg(windows)]
+    {
+        list.push((PathBuf::from(r"C:\Program Files"), SOURCE_JDK, 3));
+        list.push((PathBuf::from(r"C:\Program Files (x86)"), SOURCE_JDK, 3));
+        list.push((PathBuf::from(r"C:\ProgramData\Oracle\Java"), SOURCE_JDK, 2));
+        list.push((PathBuf::from(r"C:\ProgramData\Amazon Corretto"), SOURCE_JDK, 2));
+        list.push((PathBuf::from(r"C:\ProgramData\AdoptOpenJDK"), SOURCE_JDK, 2));
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            list.push((PathBuf::from(&local).join("Programs"), SOURCE_JDK, 3));
+            list.push((PathBuf::from(&local).join("Java"), SOURCE_JDK, 2));
+            list.push((PathBuf::from(&local).join("Microsoft"), SOURCE_JDK, 2));
+        }
+        if let Ok(profile) = std::env::var("USERPROFILE") {
+            list.push((PathBuf::from(&profile).join(".jdks"), SOURCE_JDK, 2));
+            list.push((PathBuf::from(&profile).join(".gradle").join("jdks"), SOURCE_JDK, 2));
+            list.push((PathBuf::from(&profile).join("scoop").join("apps"), SOURCE_JDK, 3));
+        }
+
+        // 各盘根目录：像 D:\jdk21、D:\桌面\xxx\jdk 这种不好归类的位置
+        for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ".chars() {
+            let root = PathBuf::from(format!("{letter}:\\"));
+            if !root.is_dir() {
+                continue;
+            }
+            list.push((root.clone(), SOURCE_JDK, 3));
+            list.push((root.join("Program Files"), SOURCE_JDK, 3));
+            list.push((root.join("Program Files (x86)"), SOURCE_JDK, 3));
+            list.push((root.join("Java"), SOURCE_JDK, 2));
+            list.push((root.join("jdk"), SOURCE_JDK, 2));
+            list.push((root.join("jre"), SOURCE_JDK, 2));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        list.push((
+            PathBuf::from("/Library/Java/JavaVirtualMachines"),
+            SOURCE_JDK,
+            2,
+        ));
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        list.push((PathBuf::from("/usr/lib/jvm"), SOURCE_JDK, 2));
+        list.push((PathBuf::from("/usr/java"), SOURCE_JDK, 2));
+        list.push((PathBuf::from("/opt/java"), SOURCE_JDK, 2));
+    }
+
+    // 整合包目录旁边经常躺着启动器自带的 JRE（比如 D:/PCL/java17）
     for dir in game_dirs {
         let mut cursor = Some(Path::new(dir));
         for _ in 0..4 {
@@ -159,8 +407,23 @@ fn candidate_roots(game_dirs: &[String]) -> Vec<PathBuf> {
             if let Ok(entries) = std::fs::read_dir(current) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.is_dir() && looks_java(&path) {
-                        roots.push(path);
+                    if !path.is_dir() || !looks_java(&path) {
+                        continue;
+                    }
+                    let exe = java_exe(&path);
+                    if exe.is_file() {
+                        list.push((path.clone(), SOURCE_JDK, 0));
+                    } else if let Ok(children) = std::fs::read_dir(&path) {
+                        for child in children.flatten() {
+                            let child_path = child.path();
+                            if !child_path.is_dir() {
+                                continue;
+                            }
+                            let exe = java_exe(&child_path);
+                            if exe.is_file() {
+                                list.push((child_path.clone(), SOURCE_JDK, 0));
+                            }
+                        }
                     }
                 }
             }
@@ -168,20 +431,10 @@ fn candidate_roots(game_dirs: &[String]) -> Vec<PathBuf> {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        roots.push(PathBuf::from("/Library/Java/JavaVirtualMachines"));
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        for base in ["/usr/lib/jvm", "/usr/java", "/opt/java"] {
-            roots.push(PathBuf::from(base));
-        }
-    }
-    roots
+    list
 }
 
-/// 启动器自己下载的运行时（原版启动器会在 .minecraft/runtime 下放 jre）
+/// 启动器自己下载的运行时（%APPDATA%/ferry-launcher/runtime/jdk21 之类）
 fn runtime_roots(game_dirs: &[String]) -> Vec<PathBuf> {
     let mut result = Vec::new();
     for dir in game_dirs {
@@ -209,56 +462,124 @@ fn runtime_roots(game_dirs: &[String]) -> Vec<PathBuf> {
     result
 }
 
-/// 把目录展开成 java 可执行文件候选
-fn exe_candidates(roots: &[PathBuf]) -> Vec<PathBuf> {
-    let mut list: Vec<PathBuf> = Vec::new();
-    let mut push = |exe: PathBuf| {
+/// 一个待探测的 java 可执行文件
+struct Candidate {
+    exe: PathBuf,
+    source: &'static str,
+}
+
+fn collect_candidates(game_dirs: &[String]) -> Vec<Candidate> {
+    let mut out: Vec<Candidate> = Vec::new();
+
+    // ---- 1. 本身就是 JDK 根目录的地方 ----
+    let mut homes: Vec<(PathBuf, &'static str)> = Vec::new();
+    if let Ok(home) = std::env::var("JAVA_HOME") {
+        homes.push((PathBuf::from(home), SOURCE_ENV));
+    }
+    #[cfg(windows)]
+    homes.extend(
+        registry_java_roots()
+            .into_iter()
+            .map(|path| (path, SOURCE_REGISTRY)),
+    );
+    for (dir, source) in homes {
+        let exe = java_exe(&dir);
         if exe.is_file() {
-            list.push(exe);
-        }
-    };
-    for root in roots {
-        let direct = java_exe(root);
-        if direct.is_file() {
-            push(direct);
-            continue;
-        }
-        let Ok(entries) = std::fs::read_dir(root) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let home = entry.path();
-            // macOS 是 Contents/Home
-            let home = if home.join("Contents").join("Home").is_dir() {
-                home.join("Contents").join("Home")
-            } else {
-                home
-            };
-            push(java_exe(&home));
+            out.push(Candidate { exe, source });
         }
     }
-    list
+
+    // ---- 2. 需要往下钻的容器目录（并行跑，不然慢） ----
+    let containers = scan_containers(game_dirs);
+    let found: std::sync::Mutex<Vec<(PathBuf, &'static str)>> = std::sync::Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for (dir, source, depth) in &containers {
+            let dir = dir.clone();
+            let source = *source;
+            let depth = *depth;
+            // 只借用不转移：Mutex 本身留在外层，线程结束后统一取结果
+            let sink = &found;
+            scope.spawn(move || {
+                let mut budget = WALK_BUDGET;
+                let mut local: Vec<PathBuf> = Vec::new();
+                if depth == 0 {
+                    // 已经是确定的 JDK 根目录
+                    let exe = java_exe(&dir);
+                    if exe.is_file() {
+                        local.push(exe);
+                    }
+                } else {
+                    walk_java_exes(&dir, depth, &mut budget, &mut local);
+                }
+                crate::util::lock(sink).extend(local.into_iter().map(|exe| (exe, source)));
+            });
+        }
+    });
+    out.extend(
+        found
+            .into_inner()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(exe, source)| Candidate { exe, source }),
+    );
+
+    // ---- 3. 实例目录下的 runtime（官方启动器结构） ----
+    for root in runtime_roots(game_dirs) {
+        let exe = java_exe(&root);
+        if exe.is_file() {
+            out.push(Candidate {
+                exe,
+                source: SOURCE_MINECRAFT,
+            });
+        }
+    }
+
+    // ---- 4. PATH 里的 java ----
+    // 注意：Oracle 的 javapath 里 java.exe 就在目录根上，不在 bin 下
+    let path_var = std::env::var("PATH").unwrap_or_default();
+    for dir in std::env::split_paths(&path_var) {
+        let direct = if cfg!(windows) {
+            dir.join("java.exe")
+        } else {
+            dir.join("java")
+        };
+        if direct.is_file() {
+            out.push(Candidate {
+                exe: direct,
+                source: SOURCE_PATH,
+            });
+        }
+        let exe = java_exe(&dir);
+        if exe.is_file() {
+            out.push(Candidate {
+                exe,
+                source: SOURCE_PATH,
+            });
+        }
+    }
+
+    out
 }
 
 pub fn detect(game_dirs: &[String]) -> Vec<JavaInfo> {
-    let mut roots = candidate_roots(game_dirs);
-    roots.extend(runtime_roots(game_dirs));
+    let candidates = collect_candidates(game_dirs);
 
-    let mut candidates = exe_candidates(&roots);
-    // PATH 里的 java 也要（可能是 shim / 便携版）
-    let path_var = std::env::var("PATH").unwrap_or_default();
-    for dir in std::env::split_paths(&path_var) {
-        let exe = java_exe(&dir);
-        if exe.is_file() {
-            candidates.push(exe);
+    // 同一个安装可能有多个路径（javapath 的软链指向真正的 jdk），
+    // 按真实路径去重，避免设置页里出现两条一模一样的 Java
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut unique: Vec<Candidate> = Vec::new();
+    for candidate in candidates {
+        let key = std::fs::canonicalize(&candidate.exe)
+            .unwrap_or_else(|_| candidate.exe.clone())
+            .to_string_lossy()
+            .to_lowercase();
+        if seen.insert(key) {
+            unique.push(candidate);
         }
     }
 
-    let mut seen: HashSet<String> = HashSet::new();
-    candidates.retain(|exe| seen.insert(exe.to_string_lossy().to_lowercase()));
-
     // 每个探测都要起一次 JVM，串行扫几十个太慢，这里并行跑
-    let total = candidates.len();
+    let total = unique.len();
     let cursor = std::sync::atomic::AtomicUsize::new(0);
     let found = std::sync::Mutex::new(Vec::new());
     std::thread::scope(|scope| {
@@ -268,7 +589,8 @@ pub fn detect(game_dirs: &[String]) -> Vec<JavaInfo> {
                 if index >= total {
                     break;
                 }
-                if let Some(info) = probe(&candidates[index]) {
+                let candidate = &unique[index];
+                if let Some(info) = probe_at(&candidate.exe, candidate.source) {
                     crate::util::lock(&found).push(info);
                 }
             });
@@ -276,6 +598,22 @@ pub fn detect(game_dirs: &[String]) -> Vec<JavaInfo> {
     });
 
     let mut result = found.into_inner().unwrap_or_default();
+
+    // 同一份安装可能有多个入口（Oracle 的 javapath 会复制一份 java.exe），
+    // 版本和厂商都一样就当成同一个，只保留来源更靠谱的那条
+    result.sort_by(|a, b| {
+        source_rank(&a.source)
+            .cmp(&source_rank(&b.source))
+            .then_with(|| a.path.len().cmp(&b.path.len()))
+    });
+    let mut seen_installs: HashSet<String> = HashSet::new();
+    result.retain(|info| {
+        seen_installs.insert(format!(
+            "{}|{}|{}|{}",
+            info.major, info.version, info.vendor, info.arch
+        ))
+    });
+
     result.sort_by(|a, b| b.major.cmp(&a.major).then(a.version.cmp(&b.version)));
     result
 }
@@ -308,16 +646,37 @@ pub fn required_major(mc_version: &str) -> u32 {
     8
 }
 
-/// 给某个版本挑一个最合适的 Java：优先主版本刚好够用且最高的
+/// 同主版本时优先用哪来源：用户自己装的比启动器下载的更可信
+fn source_rank(source: &str) -> u8 {
+    match source {
+        SOURCE_ENV => 0,
+        SOURCE_REGISTRY => 1,
+        SOURCE_JDK => 2,
+        SOURCE_PATH => 3,
+        SOURCE_MINECRAFT => 4,
+        SOURCE_RUNTIME => 5,
+        _ => 6,
+    }
+}
+
+/// 给某个版本挑一个最合适的 Java：优先主版本刚好够用且最低的
 pub fn pick(list: &[JavaInfo], mc_version: &str, preferred: Option<&str>) -> Option<JavaInfo> {
     if let Some(preferred) = preferred {
-        if let Some(found) = list.iter().find(|info| info.path.eq_ignore_ascii_case(preferred)) {
+        if let Some(found) = list
+            .iter()
+            .find(|info| info.path.eq_ignore_ascii_case(preferred))
+        {
             return Some(found.clone());
         }
     }
     let need = required_major(mc_version);
     let mut ok: Vec<&JavaInfo> = list.iter().filter(|info| info.major >= need).collect();
-    ok.sort_by_key(|info| info.major);
+    ok.sort_by(|a, b| {
+        a.major
+            .cmp(&b.major)
+            .then_with(|| source_rank(&a.source).cmp(&source_rank(&b.source)))
+            .then_with(|| a.version.cmp(&b.version))
+    });
     ok.first().map(|info| (*info).clone()).or_else(|| list.first().cloned())
 }
 
@@ -463,4 +822,75 @@ fn version_key(name: &str) -> Vec<u64> {
         groups.push(current.parse().unwrap_or(0));
     }
     groups
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_major_versions() {
+        assert_eq!(major_of("21.0.13"), 21);
+        assert_eq!(major_of("17.0.19"), 17);
+        assert_eq!(major_of("1.8.0_392"), 8);
+        assert_eq!(major_of("25.0.2"), 25);
+    }
+
+    #[test]
+    fn normalizes_arch_names() {
+        assert_eq!(normalize_arch("x86_64"), "amd64");
+        assert_eq!(normalize_arch("aarch64"), "aarch64");
+    }
+
+    #[test]
+    fn skips_obvious_junk_directories() {
+        assert!(is_junk_dir("windows"));
+        assert!(is_junk_dir("$recycle.bin"));
+        assert!(!is_junk_dir("jdk-21"));
+        assert!(!is_junk_dir("java-runtime-delta"));
+    }
+
+    /// Windows 上目录联接 / 符号链接在 DirEntry 里被标成「不是目录」，
+    /// 早期版本因此漏掉了整个联接出来的 JDK。
+    #[test]
+    #[cfg(windows)]
+    fn follows_symlinked_java_dirs() {
+        use std::os::windows::fs::symlink_dir;
+
+        let base = std::env::temp_dir().join("ferry-java-link-test");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("real").join("bin")).expect("建目录");
+        std::fs::write(base.join("real").join("bin").join("java.exe"), b"").expect("建文件");
+        if symlink_dir(base.join("real"), base.join("link")).is_err() {
+            println!("跳过：当前环境没有创建符号链接的权限");
+            let _ = std::fs::remove_dir_all(&base);
+            return;
+        }
+
+        let mut budget = 100;
+        let mut found: Vec<PathBuf> = Vec::new();
+        walk_java_exes(&base, 2, &mut budget, &mut found);
+        let hit = found
+            .iter()
+            .any(|path| path.to_string_lossy().contains("link"));
+        let _ = std::fs::remove_dir_all(&base);
+        assert!(hit, "没跟着符号链接找到 java.exe: {found:?}");
+    }
+}
+
+#[cfg(test)]
+mod local_probe {
+    use super::*;
+
+    /// 手动跑：列出本机所有能探测到的 Java
+    #[test]
+    #[ignore]
+    fn lists_installed_java() {
+        let started = std::time::Instant::now();
+        let list = detect(&[]);
+        println!("耗时 {:?}, 共 {} 个", started.elapsed(), list.len());
+        for info in &list {
+            println!("  {} | {} | {} | {}", info.major, info.version, info.source, info.path);
+        }
+    }
 }

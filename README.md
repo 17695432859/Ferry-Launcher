@@ -2,7 +2,7 @@
 
 一个给 Minecraft Java 版用的启动器。单个 exe，不用装运行库，双击就跑。
 
-当前版本 0.1.3，Windows x64，产物约 8.8 MB。
+当前版本 0.1.4，Windows x64，产物约 8.8 MB。
 
 仓库地址：https://github.com/17695432859/Ferry-Launcher （GitHub 仓库名不允许空格，使用 `Ferry-Launcher`）
 
@@ -15,7 +15,7 @@
 - **内容管理**：按实例看 mod、存档、日志、资源包；能预览、启用/禁用、删除、导入、检查更新。mod 的元数据从 jar 内部读。
 - **资源下载**：「下载」页里有「游戏版本」和「Mod / 资源」两个标签。后者支持五类内容——Mod、整合包、数据包、资源包、光影包——可按名称、来源（CurseForge / Modrinth / 全部）、游戏版本、加载器和分类筛选，结果分页展示（每页 24 条，支持上一页/下一页、首页/末页和页码直达）。选中后指定目标实例一键安装，并实时显示下载进度。文件会落到对应的 `mods`、`modpacks`、`datapacks`、`resourcepacks`、`shaderpacks` 目录。CurseForge 需要在设置里填入自己的 API Key（密钥只存在本机，环境变量 `CURSEFORGE_API_KEY` 也可以）；留空则使用不需要密钥的 Modrinth。实例详情里的 Mod 面板仍保留一个快捷抽屉。
 - **联机**：陶瓦联机和 EasyTier 直连，房间码/联机码生成与解析。两个运行时都能在应用内下载安装。
-- **Java**：多线程扫描本机 Java（含 PCL 自带的 JRE），1.21+ 需要 Java 21 但没有时可以一键从清华镜像下载。启动前校验主版本，版本不对直接提示而不是闪退。
+- **Java**：自动扫描本机 Java，来源覆盖 `JAVA_HOME`、注册表 `JavaSoft`、常见安装目录（`Program Files`、`%LOCALAPPDATA%\Programs`、`.jdks`、`.gradle\jdks`、scoop）、启动器自带运行时、Minecraft 官方运行时、系统 `PATH` 以及各盘根目录；设置页会标明每个 Java 是从哪儿找到的。1.21+ 需要 Java 21 但没有时可以一键从清华镜像下载。启动前校验主版本，版本不对直接提示而不是闪退。
 - **启动与崩溃分析**：拼完整 JVM 参数、SHA1 校验、并发下载、解压原生库、捕获日志。游戏异常退出时自动读 `ferry-latest.log` / `latest.log` / `crash-reports`，匹配 Java 版本、内存不足、缺前置、Mod 冲突、显卡驱动、存档损坏等十余种常见问题，直接给出原因和修复建议；也可以随时点启动按钮旁的「分析日志」手动分析。
 - **外观**：毛玻璃面板、主题深浅、强调色、模糊强度、背景动画、UI 缩放 90–125%、自定义背景图，全部持久化。中英双语。
 
@@ -26,7 +26,7 @@
 | 壳 | Tauri 2 + WebView2，无边框窗口，单文件 MSVC 静态链接 |
 | 渲染 | React 18 + TypeScript + Tailwind + Framer Motion + Zustand |
 | 后端 | Rust，命令白名单 IPC，严格 CSP，渲染层碰不到 Node / fs |
-| 打包 | `scripts/build-tauri.mjs`，产物 `dist/FerryLauncher-0.1.3.exe` |
+| 打包 | `scripts/build-tauri.mjs`，产物 `dist/FerryLauncher-0.1.4.exe` |
 
 旧 Electron 壳相关的脚本和配置还留在仓库里，但默认构建走 Tauri。
 
@@ -62,7 +62,7 @@ promo/              宣传片成片与配乐
 npm install
 npm run typecheck     # 类型检查
 npm run dev           # 开发模式（Vite + Tauri dev）
-npm run dist          # 打包单文件 exe → dist/FerryLauncher-0.1.3.exe
+npm run dist          # 打包单文件 exe → dist/FerryLauncher-0.1.4.exe
 ```
 
 `rust-toolchain.toml` 固定 `stable-x86_64-pc-windows-msvc`，`.cargo/config.toml` 开了 `+crt-static`，所以产物不依赖 VC 运行库。

@@ -829,12 +829,15 @@ fn instance_icon_clear(state: State<'_, AppState>, id: String) -> Vec<Instance> 
 }
 
 #[tauri::command]
-fn java_detect(state: State<'_, AppState>) -> Vec<java::JavaInfo> {
-    let dirs: Vec<String> = store::load_instances(&state)
+async fn java_detect(app: AppHandle) -> Vec<java::JavaInfo> {
+    let dirs: Vec<String> = store::load_instances(&app.state::<crate::store::AppState>())
         .into_iter()
         .map(|item| item.game_dir)
         .collect();
-    java::detect(&dirs)
+    // 扫描要起 JVM、还要遍历目录，丢到阻塞线程池里，别占着事件循环
+    tauri::async_runtime::spawn_blocking(move || java::detect(&dirs))
+        .await
+        .unwrap_or_default()
 }
 
 /// 按需下载运行时（1.21 需要 Java 21，本机没有就别硬启动）
