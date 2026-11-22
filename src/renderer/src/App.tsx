@@ -43,7 +43,6 @@ function Splash(): JSX.Element {
 export function App(): JSX.Element {
   const ready = useAppStore((state) => state.ready)
   const settings = useAppStore((state) => state.settings)
-  const backgroundImage = useAppStore((state) => state.backgroundImage)
   const init = useAppStore((state) => state.init)
   const prefersDark = usePrefersDark()
 
@@ -61,17 +60,11 @@ export function App(): JSX.Element {
   return (
     <MotionConfig reducedMotion="user">
       <div className="app-frame relative flex h-full flex-col">
-        {settings.backgroundMode === 'custom' && backgroundImage && (
-          <div
-            className="absolute inset-0 z-0 bg-cover bg-center"
-            style={{ backgroundImage: `url("${backgroundImage}")` }}
-            aria-hidden="true"
-          />
-        )}
         <TitleBar />
-        <div className="relative z-10 flex min-h-0 flex-1">
+        <div className="relative z-10 flex min-h-0 flex-1 bg-[var(--bg-0)]">
           <Sidebar />
-          <main className="relative flex min-h-0 flex-1 flex-col">
+          {/* 内容区：白底由这层铺，页面自身不再各自处理背景 */}
+          <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--bg-0)]">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/versions" element={<VersionSettingsPage />} />
@@ -80,7 +73,7 @@ export function App(): JSX.Element {
               <Route path="/multiplayer" element={<MultiplayerPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
-          </main>
+          </div>
         </div>
         <Toast />
       </div>

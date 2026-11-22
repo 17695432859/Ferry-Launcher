@@ -1,7 +1,7 @@
 /**
  * Tauri 壳的构建入口。
  *
- *   node scripts/build-tauri.mjs        生产构建 -> dist/FerryLauncher-0.2.0.exe
+ *   node scripts/build-tauri.mjs        生产构建 -> dist/FerryLauncher-0.2.1.exe
  *   node scripts/build-tauri.mjs --dev  开发模式（vite dev server + tauri dev）
  *
  * 工具链固定在 rust-toolchain.toml（MSVC）。这里不需要手动准备 vcvars：
@@ -44,7 +44,7 @@ try {
     const exe = join(cargoTargetDir, 'release', 'ferry-launcher.exe')
     if (!existsSync(exe)) throw new Error('没有产出 exe')
     mkdirSync(join(root, 'dist'), { recursive: true })
-    const out = join(root, 'dist', 'FerryLauncher-0.2.0.exe')
+    const out = join(root, 'dist', 'FerryLauncher-0.2.1.exe')
     // 先删旧文件，避免 Explorer 复用同一路径的图标缓存。
     rmSync(out, { force: true })
     copyFileSync(exe, out)

@@ -55,21 +55,6 @@
     color-scheme: light;
   }
 
-  /*
-    自定义背景是一张照片，亮度完全不可控。8% 白的玻璃压上去，
-    正文对比度会掉到 3:1 以下，所以这种模式下把面板底换成更实的一档：
-    照片还看得见（保留玻璃感），但字一定读得清。
-  */
-  :root[data-photo='1'][data-theme='dark'],
-  :root[data-photo='1'][data-theme='light'] {
-    --panel-bg: rgba(255, 255, 255, 0.9);
-    --panel-bg-strong: rgba(255, 255, 255, 0.97);
-    --panel-border: rgba(255, 255, 255, 0.95);
-    --panel-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
-    --hover-bg: rgba(17, 24, 39, 0.05);
-    --active-bg: rgba(17, 24, 39, 0.08);
-  }
-
   * {
     border-color: var(--hairline);
   }

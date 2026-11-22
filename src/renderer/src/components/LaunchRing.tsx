@@ -23,11 +23,23 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
 /**
  * 主启动按钮。点击后先跑预检（目录 / 版本文件 / 写权限 / Java），
  * 然后真的拉起游戏进程；运行中再点一次是结束进程。
+ *
+ * variant:
+ *   inline —— 小号胶囊按钮（版本设置页顶栏用）
+ *   block  —— PCL 主界面那种整条大按钮，主标题下面带实例名
  */
-export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element {
+export function LaunchRing({
+  instanceId,
+  variant = 'inline'
+}: {
+  instanceId: string
+  variant?: 'inline' | 'block'
+}): JSX.Element {
   const t = useAppStore((state) => state.t)
   const notify = useAppStore((state) => state.notify)
   const accountId = useAppStore((state) => state.settings.lastAccountId)
+  const instance = useAppStore((state) => state.instances.find((item) => item.id === instanceId) ?? null)
+  const block = variant === 'block'
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [label, setLabel] = useState('')
@@ -161,24 +173,33 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
     }
   }
 
+  const toolClass = block
+    ? 'flex h-7 flex-1 items-center justify-center gap-1 rounded-lg border border-[var(--hairline)] text-[11.5px] font-medium text-2 transition-colors hover:bg-[var(--hover-bg)] hover:text-1'
+    : 'flex h-9 w-9 items-center justify-center rounded-lg text-3 transition-colors hover:bg-[var(--hover-bg)] hover:text-1'
+
   return (
-    <div className="relative flex items-center gap-1.5">
-      <button
-        type="button"
-        onClick={() => setShowLog((open) => !open)}
-        title={t('launch.log')}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-3 transition-colors hover:bg-[var(--hover-bg)] hover:text-1"
-      >
-        <Icon name="list" size={14} />
-      </button>
-      <button
-        type="button"
-        onClick={() => void analyze()}
-        title={t('crash.analyze')}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-3 transition-colors hover:bg-[var(--hover-bg)] hover:text-1"
-      >
-        <Icon name="alert" size={14} />
-      </button>
+    <div className={block ? 'relative flex w-full flex-col gap-1.5' : 'relative flex items-center gap-1.5'}>
+      {/* 日志 / 崩溃分析：inline 模式在主按钮左侧，block 模式挪到主按钮下面一行 */}
+      <div className={block ? 'order-2 flex items-center gap-1.5' : 'contents'}>
+        <button
+          type="button"
+          onClick={() => setShowLog((open) => !open)}
+          title={t('launch.log')}
+          className={toolClass}
+        >
+          <Icon name="list" size={14} />
+          {block && <span>{t('launch.log')}</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => void analyze()}
+          title={t('crash.analyze')}
+          className={toolClass}
+        >
+          <Icon name="alert" size={14} />
+          {block && <span>{t('crash.analyze')}</span>}
+        </button>
+      </div>
 
       <motion.button
         type="button"
@@ -186,7 +207,11 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
         whileTap={{ scale: 0.97 }}
         whileHover={phase === 'idle' ? { scale: 1.015 } : undefined}
         transition={{ type: 'spring', stiffness: 380, damping: 26 }}
-        className="group relative flex h-9 items-center gap-2 overflow-hidden rounded-lg px-3.5 text-[13px] font-medium text-[var(--accent-ink)] shadow-[0_6px_18px_-8px_rgb(var(--accent-rgb)/0.8)]"
+        className={
+          block
+            ? 'group relative order-1 flex h-[52px] w-full items-center gap-2.5 overflow-hidden rounded-xl px-3 text-left text-[var(--accent-ink)] shadow-[0_10px_24px_-12px_rgb(var(--accent-rgb)/0.9)]'
+            : 'group relative flex h-9 items-center gap-2 overflow-hidden rounded-lg px-3.5 text-[13px] font-medium text-[var(--accent-ink)] shadow-[0_6px_18px_-8px_rgb(var(--accent-rgb)/0.8)]'
+        }
         style={{
           backgroundColor: phase === 'failed' ? '#c2455e' : phase === 'running' ? '#3f8f6a' : 'var(--accent)'
         }}
@@ -199,7 +224,13 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
           />
         )}
 
-        <span className="relative flex h-[22px] w-[22px] shrink-0 items-center justify-center">
+        <span
+          className={
+            block
+              ? 'relative flex h-7 w-7 shrink-0 items-center justify-center'
+              : 'relative flex h-[22px] w-[22px] shrink-0 items-center justify-center'
+          }
+        >
           <AnimatePresence mode="wait" initial={false}>
             {busy ? (
               <motion.svg
@@ -245,7 +276,16 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
           </AnimatePresence>
         </span>
 
-        <span className="relative whitespace-nowrap">{text}</span>
+        {block ? (
+          <span className="relative flex min-w-0 flex-1 flex-col justify-center leading-tight">
+            <span className="truncate text-[13.5px] font-semibold">{text}</span>
+            <span className="mt-0.5 truncate text-[11px] font-normal opacity-85">
+              {instance ? `${instance.name} · ${instance.mcVersion}` : ''}
+            </span>
+          </span>
+        ) : (
+          <span className="relative whitespace-nowrap">{text}</span>
+        )}
       </motion.button>
 
       <CrashPanel report={crashReport} analyzing={analyzing} open={showCrash} onClose={() => setShowCrash(false)} />
@@ -256,7 +296,9 @@ export function LaunchRing({ instanceId }: { instanceId: string }): JSX.Element 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="glass-strong absolute right-0 top-11 z-30 flex h-[260px] w-[460px] flex-col overflow-hidden rounded-xl border border-[var(--hairline)] shadow-xl"
+            className={`glass-strong absolute z-40 flex h-[260px] flex-col overflow-hidden rounded-xl border border-[var(--hairline)] shadow-xl ${
+              block ? 'left-0 top-[86px] w-[420px]' : 'right-0 top-11 w-[460px]'
+            }`}
           >
             <div className="flex items-center gap-2 border-b border-[var(--hairline)] px-3 py-1.5">
               <span className="text-[11.5px] text-2">{t('launch.log')}</span>

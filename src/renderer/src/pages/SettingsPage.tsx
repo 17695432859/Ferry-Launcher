@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   ACCENT_PRESETS,
-  BLUR_RANGE,
   DEFAULT_SETTINGS,
   MEMORY_RANGE,
   UI_SCALE_RANGE,
@@ -129,38 +128,6 @@ function Slider({
   )
 }
 
-function Switch({
-  checked,
-  onChange,
-  label
-}: {
-  checked: boolean
-  onChange: (checked: boolean) => void
-  label: string
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-[24px] w-[42px] rounded-full border transition-colors duration-200 ${
-        checked
-          ? 'border-accent/50 bg-accent/85'
-          : 'border-[var(--hairline)] bg-[var(--active-bg)]'
-      }`}
-    >
-      <motion.span
-        layout
-        transition={{ type: 'spring', stiffness: 520, damping: 34 }}
-        className="absolute top-[3px] h-[16px] w-[16px] rounded-full bg-white shadow-sm"
-        style={{ left: checked ? 22 : 3 }}
-      />
-    </button>
-  )
-}
-
 export function SettingsPage(): JSX.Element {
   const t = useAppStore((state) => state.t)
   const settings = useAppStore((state) => state.settings)
@@ -207,44 +174,17 @@ export function SettingsPage(): JSX.Element {
     }
   }
 
-  const pickBackground = useAppStore((state) => state.pickBackground)
-  const clearBackground = useAppStore((state) => state.clearBackground)
   const notify = useAppStore((state) => state.notify)
-
-  const handlePickBackground = async (): Promise<void> => {
-    const result = await pickBackground()
-    if (result.ok || result.reason === 'cancelled') return
-    if (result.reason === 'too-large') {
-      notify('error', t('settings.backgroundTooLarge'))
-    } else if (result.reason === 'unsupported') {
-      notify('error', t('settings.backgroundUnsupported'))
-    } else {
-      notify('error', t('home.importReadError', { message: result.message ?? '' }))
-    }
-  }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-      <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-3">
         <header className="px-1 pb-1">
           <h1 className="text-[19px] font-semibold tracking-tight text-1">{t('settings.title')}</h1>
           <p className="mt-0.5 text-[12.5px] text-2">{t('settings.subtitle')}</p>
         </header>
 
         <Section title={t('settings.appearance')}>
-          <Row label={t('settings.theme')}>
-            <Segmented
-              id="theme"
-              value={settings.theme}
-              onChange={(theme) => patch({ theme })}
-              options={[
-                { value: 'dark', label: t('settings.theme.dark') },
-                { value: 'light', label: t('settings.theme.light') },
-                { value: 'system', label: t('settings.theme.system') }
-              ]}
-            />
-          </Row>
-
           <Row label={t('settings.accent')}>
             <div className="flex items-center gap-1.5">
               {ACCENT_PRESETS.map((preset) => {
@@ -283,16 +223,6 @@ export function SettingsPage(): JSX.Element {
             </div>
           </Row>
 
-          <Row label={t('settings.blur')}>
-            <Slider
-              value={settings.blur}
-              min={BLUR_RANGE.min}
-              max={BLUR_RANGE.max}
-              suffix={t('common.px')}
-              onChange={(blur) => patch({ blur })}
-            />
-          </Row>
-
           <Row label={t('settings.scale')}>
             <Slider
               value={settings.uiScale}
@@ -303,67 +233,6 @@ export function SettingsPage(): JSX.Element {
               onChange={(uiScale) => patch({ uiScale })}
             />
           </Row>
-
-          <Row label={t('settings.bgSource')}>
-            <Segmented
-              id="bg-source"
-              value={settings.backgroundMode}
-              onChange={(backgroundMode) => patch({ backgroundMode })}
-              options={[
-                { value: 'builtin', label: t('settings.bgSourceBuiltin') },
-                { value: 'custom', label: t('settings.bgSourceCustom') }
-              ]}
-            />
-          </Row>
-
-          {settings.backgroundMode === 'custom' && (
-          <Row
-            label={t('settings.background')}
-            hint={settings.backgroundPath ? settings.backgroundPath.split(/[\\/]/).pop() : t('settings.backgroundNone')}
-          >
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => void handlePickBackground()}
-                className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--hairline)] bg-[var(--hover-bg)] px-2.5 text-[12.5px] text-2 transition-colors hover:text-1"
-              >
-                <Icon name="folder" size={13} />
-                {t('settings.backgroundPick')}
-              </button>
-              <button
-                type="button"
-                disabled={!settings.backgroundPath}
-                onClick={() => void clearBackground()}
-                className="flex h-8 items-center rounded-lg border border-[var(--hairline)] bg-[var(--hover-bg)] px-2.5 text-[12.5px] text-2 transition-colors hover:text-1 disabled:opacity-40"
-              >
-                {t('settings.backgroundClear')}
-              </button>
-            </div>
-          </Row>
-
-          )}
-
-          {settings.backgroundMode === 'custom' && (
-            <Row label={t('settings.backgroundDim')}>
-              <Slider
-                value={settings.backgroundDim}
-                min={0}
-                max={80}
-                suffix={t('common.percent')}
-                onChange={(backgroundDim) => patch({ backgroundDim })}
-              />
-            </Row>
-          )}
-
-          {settings.backgroundMode === 'builtin' && (
-            <Row label={t('settings.bgAnim')} hint={t('settings.bgAnimHint')}>
-              <Switch
-                checked={settings.backgroundAnimation}
-                label={t('settings.bgAnim')}
-                onChange={(backgroundAnimation) => patch({ backgroundAnimation })}
-              />
-            </Row>
-          )}
         </Section>
 
         <Section title={t('settings.launch')}>
@@ -499,7 +368,7 @@ export function SettingsPage(): JSX.Element {
           <Row
             label={t('app.name')}
             hint={t('settings.aboutBody', {
-              version: info?.version ?? '0.2.0',
+              version: info?.version ?? '0.2.1',
               electron: info?.electron ?? '-',
               chrome: info?.chrome ?? '-'
             })}

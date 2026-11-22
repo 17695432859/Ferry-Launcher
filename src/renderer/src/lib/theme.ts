@@ -29,8 +29,6 @@ export function resolveTheme(mode: AppSettings['theme'], prefersDark: boolean): 
 export function applyTheme(settings: AppSettings, prefersDark: boolean): void {
   const root = document.documentElement
   root.dataset.theme = resolveTheme(settings.theme, prefersDark)
-  // 自定义背景是照片，亮度不可控；面板要换一档更实的底，否则正文对比度守不住
-  root.dataset.photo = settings.backgroundMode === 'custom' ? '1' : '0'
   root.style.setProperty('--accent', settings.accent)
   root.style.setProperty('--accent-rgb', hexToRgbChannels(settings.accent))
   root.style.setProperty('--accent-ink', relativeLuminance(settings.accent) > 0.6 ? '#0b1120' : '#ffffff')

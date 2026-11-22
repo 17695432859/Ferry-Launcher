@@ -14,7 +14,7 @@ landing/
 
 # 只保留最终交付的单文件 exe，排除 electron 旧产物和构建中间目录
 dist/*
-!dist/FerryLauncher-0.2.0.exe
+!dist/FerryLauncher-0.2.1.exe
 
 # 自动化测试用的临时档案与演示游戏目录
 demo-profile*/

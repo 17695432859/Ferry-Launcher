@@ -1,157 +1,155 @@
-import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import type { ImportOutcome } from '@shared/ipc'
+import type { ScanWarning } from '@shared/types'
 import { useAppStore } from '@renderer/store/app-store'
 import { Icon } from './Icon'
-import { SkinAvatar } from './SkinAvatar'
+import { InstanceTile } from './InstanceIcon'
+import { LaunchRing } from './LaunchRing'
 
-/** PCL 风格的左侧账号面板：登录入口、皮肤头像、启动游戏、版本选择/设置 */
+/**
+ * PCL 风格的左侧版本面板：顶部版本列表 + 新建/导入，
+ * 中间可点选的实例列表，底部启动游戏 + 版本设置（PCL 的「主界面左下角版本设置」）。
+ */
 export function Sidebar(): JSX.Element {
   const t = useAppStore((state) => state.t)
-  const accounts = useAppStore((state) => state.accounts)
-  const activeId = useAppStore((state) => state.settings.lastAccountId)
   const instances = useAppStore((state) => state.instances)
   const selectedId = useAppStore((state) => state.selectedId)
   const selectInstance = useAppStore((state) => state.selectInstance)
+  const importInstance = useAppStore((state) => state.importInstance)
+  const importing = useAppStore((state) => state.importing)
   const notify = useAppStore((state) => state.notify)
   const navigate = useNavigate()
+  const [query, setQuery] = useState('')
 
-  const [versionsOpen, setVersionsOpen] = useState(false)
-  const [launching, setLaunching] = useState(false)
-
-  useEffect(() => {
-    const onDown = (event: MouseEvent): void => {
-      const target = event.target as HTMLElement
-      if (!target.closest('[data-version-picker]')) setVersionsOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [])
-
-  const active = accounts.find((item) => item.id === activeId) ?? accounts[0] ?? null
   const selected = instances.find((item) => item.id === selectedId) ?? instances[0] ?? null
+  const filtered = useMemo(() => {
+    const keyword = query.trim().toLowerCase()
+    if (!keyword) return instances
+    return instances.filter(
+      (item) =>
+        item.name.toLowerCase().includes(keyword) || item.mcVersion.toLowerCase().includes(keyword)
+    )
+  }, [instances, query])
 
-  const handleLaunch = async (): Promise<void> => {
-    if (launching) return
-    if (!selected) {
-      notify('error', t('home.noInstancesHint'))
+  const describeWarning = (warning: ScanWarning): string => {
+    switch (warning.code) {
+      case 'multiple-versions':
+        return t('home.importWarnMultiple', { count: warning.count, chosen: warning.chosen })
+      case 'no-version-json':
+        return t('home.importWarnNoJson')
+      case 'mods-without-version':
+        return t('home.importWarnMods')
+    }
+  }
+
+  const handleImport = async (): Promise<void> => {
+    const outcome: ImportOutcome = await importInstance()
+    if (!outcome.ok) {
+      if (outcome.reason === 'cancelled') return
+      if (outcome.reason === 'not-a-game-dir') {
+        notify('error', t('home.importNoGameDir'))
+        return
+      }
+      if (outcome.reason === 'duplicate') {
+        notify('error', t('home.importDuplicate'))
+        return
+      }
+      notify('error', t('home.importReadError', { message: outcome.message }))
       return
     }
-    setLaunching(true)
-    try {
-      const steps = await window.ferry.preflightInstance(selected.id)
-      if (steps.length === 0) {
-        notify('error', t('launch.failed', { message: 'preflight' }))
-        return
-      }
-      const failed = steps.find((step) => !step.ok)
-      if (failed) {
-        notify('error', failed.id === 'java' ? t('launch.noJava') : t('launch.failed', { message: failed.id }))
-        return
-      }
-      const outcome = await window.ferry.launch(selected.id, active?.id ?? null)
-      if (!outcome.ok) {
-        const [need, found] = outcome.message.split('|')
-        notify(
-          'error',
-          outcome.reason === 'no-account'
-            ? t('launch.noAccount')
-            : outcome.reason === 'auth-expired'
-              ? t('launch.authExpired')
-              : outcome.reason === 'java-too-old'
-                ? t('launch.javaTooOld', { need, found })
-                : t('launch.failed', { message: outcome.message })
-        )
-        return
-      }
-      notify('success', t('launch.running'))
-    } finally {
-      setLaunching(false)
+    const suffix = outcome.warnings.length > 0 ? ` · ${describeWarning(outcome.warnings[0])}` : ''
+    if (outcome.instances.length === 1) {
+      notify('success', `${t('home.importOk', { name: outcome.instances[0].name })}${suffix}`)
+    } else {
+      const skipped = outcome.skipped > 0 ? t('home.importSkipped', { count: outcome.skipped }) : ''
+      notify(
+        'success',
+        `${t('home.importOkMany', { count: outcome.instances.length })}${skipped}${suffix}`
+      )
     }
   }
 
   return (
-    <nav className="relative z-10 flex w-[272px] shrink-0 flex-col border-r border-[var(--hairline)] bg-[var(--sidebar-bg)] px-4 pb-4 pt-5">
-      <button
-        type="button"
-        onClick={() => navigate('/accounts')}
-        className="flex items-center gap-1.5 self-start text-[12.5px] font-medium text-[#2d7dd2] transition-opacity hover:opacity-75"
-      >
-        <Icon name="user" size={14} />
-        <span>{active?.sourceName ?? 'LittleSkin'} {t('accounts.loginShort')}</span>
-      </button>
-
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 pb-6">
-        <SkinAvatar account={active} size={80} />
-        <div className="mt-1 text-center">
-          <p className="text-[15px] font-semibold text-[var(--sidebar-text)]">{active?.profileName ?? t('accounts.notSignedIn')}</p>
-          <p className="mt-0.5 text-[11.5px] text-[var(--sidebar-text-2)]">{active?.userName ?? ''}</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
+    <nav className="relative z-20 flex w-[264px] shrink-0 flex-col border-r border-[var(--hairline)] bg-[var(--sidebar-bg)] px-3 pb-3 pt-4">
+      <div className="flex items-center gap-2 px-1">
+        <h2 className="text-[12.5px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-text-2)]">
+          {t('home.instances')}
+        </h2>
+        <span className="rounded-md bg-[var(--hover-bg)] px-1.5 py-px text-[11px] tnum text-[var(--sidebar-text-2)]">
+          {instances.length}
+        </span>
         <button
           type="button"
-          onClick={() => void handleLaunch()}
-          disabled={launching}
-          className="flex h-[52px] flex-col items-center justify-center rounded-lg border border-[#2d7dd2] bg-white/70 text-[#2d7dd2] transition-colors hover:bg-[#2d7dd2] hover:text-white disabled:opacity-60"
+          onClick={() => void handleImport()}
+          disabled={importing}
+          title={t('home.import')}
+          aria-label={t('home.import')}
+          className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-[var(--sidebar-text-2)] transition-colors hover:bg-[var(--hover-bg)] hover:text-accent disabled:opacity-60"
         >
-          <span className="text-[13px] font-semibold">{launching ? t('home.launching') : t('home.launch')}</span>
-          <span className="mt-0.5 max-w-[220px] truncate text-[11px] opacity-75">
-            {selected?.name ?? t('home.noInstances')}
-          </span>
+          <Icon name={importing ? 'spark' : 'plus'} size={15} />
         </button>
+      </div>
 
-        <div className="grid grid-cols-2 gap-2" data-version-picker>
-          <div className="relative">
+      <div className="relative mt-3">
+        <Icon
+          name="search"
+          size={13}
+          className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--sidebar-text-2)]"
+        />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t('home.search')}
+          className="h-9 w-full rounded-lg border border-[var(--hairline)] bg-white pl-7 pr-2.5 text-[13px] text-[var(--sidebar-text)] outline-none transition-colors placeholder:text-[var(--sidebar-text-2)] focus:border-accent/60"
+        />
+      </div>
+
+      <div className="mt-2.5 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-0.5">
+        {filtered.map((instance) => {
+          const active = instance.id === selected?.id
+          return (
             <button
+              key={instance.id}
               type="button"
-              onClick={() => setVersionsOpen((open) => !open)}
-              className="h-9 w-full rounded-lg border border-[var(--hairline)] bg-white/70 text-[12px] font-medium text-[var(--sidebar-text)] transition-colors hover:bg-[var(--hover-bg)]"
+              onClick={() => selectInstance(instance.id)}
+              className={`relative flex w-full shrink-0 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors ${
+                active
+                  ? 'border-accent/45 bg-accent/10'
+                  : 'border-transparent hover:border-[var(--hairline)] hover:bg-[var(--hover-bg)]'
+              }`}
             >
-              {t('home.versionSelect')}
-            </button>
-            <AnimatePresence>
-              {versionsOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  transition={{ duration: 0.15 }}
-                  className="glass-strong absolute bottom-11 left-0 z-40 max-h-[280px] w-[248px] overflow-y-auto rounded-xl border border-[var(--hairline)] p-1 shadow-xl"
-                >
-                  {instances.map((instance) => (
-                    <button
-                      key={instance.id}
-                      type="button"
-                      onClick={() => {
-                        selectInstance(instance.id)
-                        setVersionsOpen(false)
-                      }}
-                      className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[12px] transition-colors hover:bg-[var(--hover-bg)] ${
-                        instance.id === selectedId ? 'accent-text' : 'text-[var(--sidebar-text)]'
-                      }`}
-                    >
-                      <Icon name={instance.id === selectedId ? 'check' : 'play'} size={13} />
-                      <span className="min-w-0 flex-1 truncate">{instance.name}</span>
-                      <span className="shrink-0 text-[11px] text-[var(--sidebar-text-2)]">{instance.mcVersion}</span>
-                    </button>
-                  ))}
-                  {instances.length === 0 && (
-                    <p className="px-2 py-4 text-center text-[12px] text-[var(--sidebar-text-2)]">{t('home.noInstancesHint')}</p>
-                  )}
-                </motion.div>
+              {active && (
+                <span className="absolute inset-y-2 left-0 w-[3px] rounded-full bg-accent" aria-hidden="true" />
               )}
-            </AnimatePresence>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/versions')}
-            className="h-9 rounded-lg border border-[var(--hairline)] bg-white/70 text-[12px] font-medium text-[var(--sidebar-text)] transition-colors hover:bg-[var(--hover-bg)]"
-          >
-            {t('home.versionSettings')}
-          </button>
-        </div>
+              <InstanceTile instance={instance} size={38} radius={8} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium text-[var(--sidebar-text)]">
+                  {instance.name}
+                </span>
+                <span className="mt-0.5 block truncate text-[11.5px] text-[var(--sidebar-text-2)]">
+                  Minecraft {instance.mcVersion}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+        {filtered.length === 0 && (
+          <p className="px-1 py-6 text-center text-[12.5px] text-[var(--sidebar-text-2)]">
+            {instances.length === 0 ? t('home.noInstancesHint') : t('home.searchEmpty')}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-col gap-2 border-t border-[var(--hairline)] pt-3">
+        {selected && <LaunchRing instanceId={selected.id} variant="block" />}
+        <button
+          type="button"
+          onClick={() => navigate('/versions')}
+          className="h-8 rounded-lg border border-[var(--hairline)] bg-white text-[11.5px] font-medium text-[var(--sidebar-text)] transition-colors hover:bg-[var(--hover-bg)]"
+        >
+          {t('home.versionSettings')}
+        </button>
       </div>
     </nav>
   )
