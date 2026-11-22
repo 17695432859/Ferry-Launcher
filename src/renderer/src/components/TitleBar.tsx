@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAppStore } from '@renderer/store/app-store'
 import { Icon, type IconName } from './Icon'
 import { SkinAvatar } from './SkinAvatar'
@@ -14,33 +13,21 @@ interface Tab {
 const TABS: Tab[] = [
   { to: '/', icon: 'play', labelKey: 'nav.home' },
   { to: '/downloads', icon: 'download', labelKey: 'nav.downloads' },
+  { to: '/multiplayer', icon: 'cube', labelKey: 'nav.multiplayer' },
   { to: '/settings', icon: 'settings', labelKey: 'nav.settings' }
 ]
 
 /**
- * 顶栏：左侧标识、居中功能入口（启动/下载/设置/更多）、
+ * 顶栏：左侧标识、居中功能入口（启动/下载/联机/设置）、
  * 右上角账号头像（PCL 的账号切换入口）+ 窗口按钮。
  */
 export function TitleBar(): JSX.Element {
   const t = useAppStore((state) => state.t)
   const accounts = useAppStore((state) => state.accounts)
   const activeId = useAppStore((state) => state.settings.lastAccountId)
-  const location = useLocation()
   const navigate = useNavigate()
-  const [moreOpen, setMoreOpen] = useState(false)
-  const moreRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    const onDown = (event: MouseEvent): void => {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) setMoreOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [])
 
   const active = accounts.find((item) => item.id === activeId) ?? accounts[0] ?? null
-  const moreActive = location.pathname === '/multiplayer' || location.pathname === '/accounts'
-  const closeMore = (): void => setMoreOpen(false)
 
   return (
     <header
@@ -70,40 +57,6 @@ export function TitleBar(): JSX.Element {
             <span>{t(tab.labelKey)}</span>
           </NavLink>
         ))}
-
-        <div className="relative" ref={moreRef}>
-          <button
-            type="button"
-            onClick={() => setMoreOpen((open) => !open)}
-            className={[
-              'no-drag flex h-[26px] items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-colors duration-150',
-              moreActive || moreOpen
-                ? 'bg-accent/12 accent-text'
-                : 'text-[var(--sidebar-text-2)] hover:bg-[var(--hover-bg)] hover:text-[var(--sidebar-text)]'
-            ].join(' ')}
-          >
-            <Icon name="grid" size={13} />
-            <span>{t('nav.more')}</span>
-          </button>
-
-          {moreOpen && (
-            <div className="glass-strong absolute left-1/2 top-9 z-30 w-[132px] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--hairline)] py-1 shadow-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  navigate('/multiplayer')
-                  closeMore()
-                }}
-                className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-[var(--hover-bg)] ${
-                  location.pathname === '/multiplayer' ? 'accent-text' : 'text-1'
-                }`}
-              >
-                <Icon name="cube" size={14} />
-                <span>{t('nav.multiplayer')}</span>
-              </button>
-            </div>
-          )}
-        </div>
       </nav>
 
       <div className="flex items-center justify-end gap-1">
