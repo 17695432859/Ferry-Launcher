@@ -1,7 +1,5 @@
 # Ferry Launcher
 
-一个给 Minecraft Java 版用的启动器。单个 exe，不用装运行库，双击就跑。
-
 当前版本 0.1.4，Windows x64，产物约 8.8 MB。
 
 仓库地址：https://github.com/17695432859/Ferry-Launcher
