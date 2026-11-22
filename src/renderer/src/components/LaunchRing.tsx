@@ -173,8 +173,9 @@ export function LaunchRing({
     }
   }
 
+  // block 模式两个按钮等宽，内容左对齐（图标落在同一条竖线上，不随文字长短左右飘）
   const toolClass = block
-    ? 'flex h-7 flex-1 items-center justify-center gap-1 rounded-lg border border-[var(--hairline)] text-[11.5px] font-medium text-2 transition-colors hover:bg-[var(--hover-bg)] hover:text-1'
+    ? 'flex h-7 flex-1 items-center justify-start gap-1.5 rounded-lg border border-[var(--hairline)] px-2.5 text-[11.5px] font-medium text-2 transition-colors hover:bg-[var(--hover-bg)] hover:text-1'
     : 'flex h-9 w-9 items-center justify-center rounded-lg text-3 transition-colors hover:bg-[var(--hover-bg)] hover:text-1'
 
   return (
