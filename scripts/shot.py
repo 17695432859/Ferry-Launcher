@@ -58,7 +58,7 @@ class BITMAPINFO(ctypes.Structure):
 def our_pids():
     """启动器进程的 PID 集合，用来把同名的浏览器窗口排除掉"""
     pids = set()
-    for name in ("ferry-launcher.exe", "FerryLauncher-0.1.0.exe"):
+    for name in ("ferry-launcher.exe", "FerryLauncher-0.1.0.exe", "FerryLauncher-0.2.0.exe"):
         out = subprocess.run(
             ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV", "/NH"],
             capture_output=True, text=True, errors="ignore",
@@ -155,7 +155,7 @@ def encode_png(width, height, raw):
 
 
 def alive():
-    names = ("ferry-launcher.exe", "ferrylauncher-0.1.0.exe")
+    names = ("ferry-launcher.exe", "ferrylauncher-0.1.0.exe", "ferrylauncher-0.2.0.exe")
     for name in names:
         out = subprocess.run(
             ["tasklist", "/FI", f"IMAGENAME eq {name}", "/NH"],
@@ -177,6 +177,8 @@ def start():
     # reqwest 默认会走它，截图里的下载失败其实是被代理拦了
     env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
     env.pop("NO_PROXY", None)
+    if os.environ.get("FERRY_DATA_DIR"):
+        env["FERRY_DATA_DIR"] = os.environ["FERRY_DATA_DIR"]
     subprocess.Popen([str(EXE)], cwd=str(EXE.parent), env=env,
                      creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS|NEW_PROCESS_GROUP
     for _ in range(40):
@@ -211,7 +213,7 @@ def capture(target):
 
 
 def kill():
-    for name in ("ferry-launcher.exe", "FerryLauncher-0.1.0.exe"):
+    for name in ("ferry-launcher.exe", "FerryLauncher-0.1.0.exe", "FerryLauncher-0.2.0.exe"):
         subprocess.run(["taskkill", "/F", "/IM", name], capture_output=True)
     print("已结束")
     return 0

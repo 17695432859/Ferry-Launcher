@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AppInfo, AppSettings, Instance } from '@shared/types'
+import type { AccountSummary, AppInfo, AppSettings, Instance } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import { translate, type TranslationKey } from '@shared/i18n'
 import type { BackgroundPickResult, ImportOutcome, InstancePatch } from '@shared/ipc'
@@ -23,6 +23,8 @@ interface AppState {
   importing: boolean
   /** 自定义背景图的 data URL，null 表示用程序化背景 */
   backgroundImage: string | null
+  /** 账户列表，标题栏与账户页共用同一份 */
+  accounts: AccountSummary[]
 
   init: () => Promise<void>
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
@@ -33,6 +35,8 @@ interface AppState {
   importInstance: () => Promise<ImportOutcome>
   /** 重新拉一次实例列表（新建 / 安装完成后用） */
   reloadInstances: () => Promise<void>
+  /** 重新拉一次账户列表（登录 / 移除 / 切角色后用） */
+  reloadAccounts: () => Promise<void>
   updateInstance: (id: string, patch: InstancePatch) => Promise<void>
   removeInstance: (id: string) => Promise<void>
   notify: (kind: ToastMessage['kind'], text: string) => void
@@ -66,6 +70,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   toast: null,
   importing: false,
   backgroundImage: null,
+  accounts: [],
 
   init: async () => {
     const [info, settings, instances] = await Promise.all([
@@ -85,6 +90,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       backgroundImage,
       ready: true
     })
+    // 账户单独拉：旧 Electron 预览壳没有账户接口，失败也不能挡住首屏
+    await get().reloadAccounts()
   },
 
   updateSettings: async (patch) => {
@@ -138,6 +145,15 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? state.selectedId
           : (instances[0]?.id ?? null)
     }))
+  },
+
+  reloadAccounts: async () => {
+    try {
+      set({ accounts: await window.ferry.accounts.list() })
+    } catch {
+      // 旧 Electron 预览壳没有账户接口，这里静默降级成空列表
+      set({ accounts: [] })
+    }
   },
 
   updateInstance: async (id, patch) => {

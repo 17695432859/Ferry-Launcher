@@ -93,6 +93,8 @@ export interface AccountSummary {
   /** Yggdrasil 根地址，离线账户为 null */
   apiRoot: string | null
   profileName: string
+  /** 登录账号名（外置登录常是邮箱），离线账户为 null */
+  userName: string | null
   uuid: string
   skinUrl: string | null
   capeUrl: string | null

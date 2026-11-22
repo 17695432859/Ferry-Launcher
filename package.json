@@ -1,6 +1,6 @@
 {
   "name": "ferry-launcher",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Ferry Launcher - a glassmorphic Minecraft Java launcher",
   "main": "./out/main/index.js",
   "author": "Ferry Launcher",

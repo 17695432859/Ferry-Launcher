@@ -15,6 +15,10 @@
     --ui-scale: 1;
     --radius-panel: 16px;
     --radius-card: 20px;
+    /* PCL 风格侧栏：固定浅色，不随明暗主题切换 */
+    --sidebar-bg: #f7f8fa;
+    --sidebar-text: #1f2329;
+    --sidebar-text-2: #6b7280;
     --dur-fast: 120ms;
     --dur-base: 220ms;
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);

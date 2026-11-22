@@ -104,8 +104,9 @@ export function AccountsPage(): JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const notify = useAppStore((state) => state.notify)
+  const accounts = useAppStore((state) => state.accounts)
+  const reloadAccounts = useAppStore((state) => state.reloadAccounts)
 
-  const [accounts, setAccounts] = useState<AccountSummary[]>([])
   const [kind, setKind] = useState<AddKind>('littleskin')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,8 +122,8 @@ export function AccountsPage(): JSX.Element {
   const active = accounts.find((item) => item.id === activeId) ?? accounts[0] ?? null
 
   const refresh = useCallback(async (): Promise<void> => {
-    setAccounts(await window.ferry.accounts.list())
-  }, [])
+    await reloadAccounts()
+  }, [reloadAccounts])
 
   useEffect(() => {
     void refresh()
@@ -202,7 +203,7 @@ export function AccountsPage(): JSX.Element {
     setSwitching(profileId)
     try {
       const updated = await window.ferry.accounts.selectProfile(account.id, profileId)
-      setAccounts((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+      await reloadAccounts()
       notify('success', t('accounts.profileSwitched', { name: updated.profileName }))
     } catch (caught) {
       const message = String(caught)
@@ -219,7 +220,7 @@ export function AccountsPage(): JSX.Element {
 
   const handleRemove = async (account: AccountSummary): Promise<void> => {
     const next = await window.ferry.accounts.remove(account.id)
-    setAccounts(next)
+    await reloadAccounts()
     if (activeId === account.id) {
       await updateSettings({ lastAccountId: next[0]?.id ?? null })
     }

@@ -1,6 +1,6 @@
 [package]
 name = "ferry-launcher"
-version = "0.1.4"
+version = "0.2.0"
 description = "Ferry Launcher"
 authors = ["Ferry Launcher"]
 edition = "2021"
@@ -41,7 +41,10 @@ winreg = "0.52"
 
 [profile.release]
 codegen-units = 1
-lto = "fat"
+# LTO 关掉：fat/thin 在本机（火绒实时扫描 target）会在链接阶段死锁或报「拒绝访问」。
+# 构建脚本已把 CARGO_TARGET_DIR 指到 %TEMP% 规避；这里再关 LTO 双保险。
+# 代价是 exe 从 ~9MB 涨到 ~10.5MB，换来稳定可复现的构建。
+lto = "off"
 # 体积优先：unwind 会带来额外的栈展开表，用 z 把能省的空间省回来
 opt-level = "z"
 # 用 unwind 而不是 abort：单条命令 panic 时只让那次调用失败，

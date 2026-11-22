@@ -1,7 +1,7 @@
 /**
  * Tauri 壳的构建入口。
  *
- *   node scripts/build-tauri.mjs        生产构建 -> dist/FerryLauncher-0.1.4.exe
+ *   node scripts/build-tauri.mjs        生产构建 -> dist/FerryLauncher-0.2.0.exe
  *   node scripts/build-tauri.mjs --dev  开发模式（vite dev server + tauri dev）
  *
  * 工具链固定在 rust-toolchain.toml（MSVC）。这里不需要手动准备 vcvars：
@@ -16,8 +16,13 @@ import { join, resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '..')
 const dev = process.argv.includes('--dev')
 
+// 火绒等杀软会实时扫描项目目录里新生成的 .rcgu.o，导致 cargo 删除/写入中间产物时报
+// 「拒绝访问」或在 LTO 链接阶段死锁。把编译目标挪到 %TEMP% 下即可避开——那里不在
+// 杀软的实时扫描热点里。产物出来后再拷回项目。
+const cargoTargetDir = join(process.env.TEMP || join(homedir(), 'AppData', 'Local', 'Temp'), 'ferry-build')
 const env = {
   ...process.env,
+  CARGO_TARGET_DIR: cargoTargetDir,
   PATH: `${join(homedir(), '.cargo', 'bin')};${process.env.PATH}`
 }
 
@@ -36,10 +41,10 @@ try {
     console.log('\n> 编译 Rust')
     await run(['tauri', 'build', '--no-bundle'])
 
-    const exe = join(root, 'src-tauri', 'target', 'release', 'ferry-launcher.exe')
+    const exe = join(cargoTargetDir, 'release', 'ferry-launcher.exe')
     if (!existsSync(exe)) throw new Error('没有产出 exe')
     mkdirSync(join(root, 'dist'), { recursive: true })
-    const out = join(root, 'dist', 'FerryLauncher-0.1.4.exe')
+    const out = join(root, 'dist', 'FerryLauncher-0.2.0.exe')
     // 先删旧文件，避免 Explorer 复用同一路径的图标缓存。
     rmSync(out, { force: true })
     copyFileSync(exe, out)

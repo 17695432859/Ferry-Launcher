@@ -11,6 +11,7 @@ import { DownloadsPage } from '@renderer/pages/DownloadsPage'
 import { HomePage } from '@renderer/pages/HomePage'
 import { MultiplayerPage } from '@renderer/pages/MultiplayerPage'
 import { SettingsPage } from '@renderer/pages/SettingsPage'
+import { VersionSettingsPage } from '@renderer/pages/VersionSettingsPage'
 import { applyTheme } from '@renderer/lib/theme'
 import { useAppStore } from '@renderer/store/app-store'
 
@@ -94,6 +95,7 @@ export function App(): JSX.Element {
           <main className="relative flex min-h-0 flex-1 flex-col">
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/versions" element={<VersionSettingsPage />} />
               <Route path="/accounts" element={<AccountsPage />} />
               <Route path="/downloads" element={<DownloadsPage />} />
               <Route path="/multiplayer" element={<MultiplayerPage />} />
