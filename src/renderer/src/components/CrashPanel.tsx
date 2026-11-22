@@ -15,9 +15,11 @@ interface Props {
   analyzing: boolean
   open: boolean
   onClose: () => void
+  /** 侧栏底部的大启动按钮上，下面没有空间，面板改为向上展开 */
+  block?: boolean
 }
 
-export function CrashPanel({ report, analyzing, open, onClose }: Props): JSX.Element {
+export function CrashPanel({ report, analyzing, open, onClose, block = false }: Props): JSX.Element {
   const t = useAppStore((state) => state.t)
 
   return (
@@ -28,7 +30,11 @@ export function CrashPanel({ report, analyzing, open, onClose }: Props): JSX.Ele
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -6, scale: 0.98 }}
           transition={{ duration: 0.15 }}
-          className="glass-strong absolute right-0 top-11 z-40 flex max-h-[440px] w-[500px] flex-col overflow-hidden rounded-xl border border-[var(--hairline)] shadow-xl"
+          className={`glass-strong absolute z-40 flex flex-col overflow-hidden rounded-xl border border-[var(--hairline)] shadow-xl ${
+            block
+              ? 'bottom-full left-0 mb-2 max-h-[min(440px,calc(100vh-220px))] w-[440px] max-w-[calc(100vw-28px)]'
+              : 'right-0 top-11 max-h-[440px] w-[500px]'
+          }`}
         >
           <div className="flex items-center gap-2 border-b border-[var(--hairline)] px-3 py-2">
             <Icon name="alert" size={13} className={report?.crashed ? 'text-[#c2455e]' : 'text-3'} />

@@ -158,6 +158,13 @@ export function LaunchRing({
           ? label
           : t('home.launch')
 
+  // 副标题只留实例名。PCL 导入的实例目录名常以版本号开头，
+  // 再拼一遍版本号会变成「1.20.1巧克力工厂客户端（玩的时候… · 1.20.1」，
+  // 一行放不下，截断后只剩半句；版本在实例列表里已经写着。
+  const subtitle = instance
+    ? instance.name.replace(/^\s*[\d.]+[-_\s]*/, '').trim() || instance.mcVersion
+    : ''
+
   const analyze = async (): Promise<void> => {
     setShowLog(false)
     setShowCrash(true)
@@ -210,7 +217,7 @@ export function LaunchRing({
         transition={{ type: 'spring', stiffness: 380, damping: 26 }}
         className={
           block
-            ? 'group relative order-1 flex h-[52px] w-full items-center gap-2.5 overflow-hidden rounded-xl px-3 text-left text-[var(--accent-ink)] shadow-[0_10px_24px_-12px_rgb(var(--accent-rgb)/0.9)]'
+            ? 'group relative order-1 flex h-[60px] w-full items-center gap-2.5 overflow-hidden rounded-xl px-3 text-left text-[var(--accent-ink)] shadow-[0_10px_24px_-12px_rgb(var(--accent-rgb)/0.9)]'
             : 'group relative flex h-9 items-center gap-2 overflow-hidden rounded-lg px-3.5 text-[13px] font-medium text-[var(--accent-ink)] shadow-[0_6px_18px_-8px_rgb(var(--accent-rgb)/0.8)]'
         }
         style={{
@@ -278,10 +285,13 @@ export function LaunchRing({
         </span>
 
         {block ? (
-          <span className="relative flex min-w-0 flex-1 flex-col justify-center leading-tight">
+          <span
+            className="relative flex min-w-0 flex-1 flex-col justify-center leading-tight"
+            title={instance ? `${instance.name} · ${instance.mcVersion}` : undefined}
+          >
             <span className="truncate text-[13.5px] font-semibold">{text}</span>
-            <span className="mt-0.5 truncate text-[11px] font-normal opacity-85">
-              {instance ? `${instance.name} · ${instance.mcVersion}` : ''}
+            <span className="mt-0.5 line-clamp-2 text-[11px] font-normal leading-[1.35] opacity-85">
+              {subtitle}
             </span>
           </span>
         ) : (
@@ -289,7 +299,13 @@ export function LaunchRing({
         )}
       </motion.button>
 
-      <CrashPanel report={crashReport} analyzing={analyzing} open={showCrash} onClose={() => setShowCrash(false)} />
+      <CrashPanel
+        report={crashReport}
+        analyzing={analyzing}
+        open={showCrash}
+        onClose={() => setShowCrash(false)}
+        block={block}
+      />
       <AnimatePresence>
         {showLog && (
           <motion.div
@@ -297,8 +313,10 @@ export function LaunchRing({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className={`glass-strong absolute z-40 flex h-[260px] flex-col overflow-hidden rounded-xl border border-[var(--hairline)] shadow-xl ${
-              block ? 'left-0 top-[86px] w-[420px]' : 'right-0 top-11 w-[460px]'
+            className={`glass-strong absolute z-40 flex flex-col overflow-hidden rounded-xl border border-[var(--hairline)] shadow-xl ${
+              block
+                ? 'bottom-full left-0 mb-2 h-[260px] max-h-[min(260px,calc(100vh-220px))] w-[420px] max-w-[calc(100vw-28px)]'
+                : 'right-0 top-11 h-[260px] w-[460px]'
             }`}
           >
             <div className="flex items-center gap-2 border-b border-[var(--hairline)] px-3 py-1.5">
