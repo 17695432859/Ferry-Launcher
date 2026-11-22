@@ -15,59 +15,42 @@
     --ui-scale: 1;
     --radius-panel: 16px;
     --radius-card: 20px;
-    /* PCL 风格侧栏：固定浅色，不随明暗主题切换 */
-    --sidebar-bg: #f7f8fa;
+    /* 侧栏与整体统一纯白 */
+    --sidebar-bg: #ffffff;
     --sidebar-text: #1f2329;
     --sidebar-text-2: #6b7280;
     --dur-fast: 120ms;
     --dur-base: 220ms;
     --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
-    color-scheme: dark;
+    color-scheme: light;
   }
 
-  :root[data-theme='dark'] {
-    --bg-0: #0a0b0e;
-    --bg-1: #101216;
-    --bg-2: #131519;
-
-    --panel-bg: rgba(255, 255, 255, 0.075);
-    --panel-bg-strong: rgba(255, 255, 255, 0.115);
-    --panel-border: rgba(255, 255, 255, 0.14);
-    --panel-solid: #15171c;
-    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.38);
-
-    --text-1: #f4f5f7;
-    --text-2: rgba(244, 245, 247, 0.68);
-    --text-3: rgba(244, 245, 247, 0.44);
-
-    --cover-scrim: rgba(10, 14, 24, 0.72);
-    --hairline: rgba(255, 255, 255, 0.08);
-    --hover-bg: rgba(255, 255, 255, 0.06);
-    --active-bg: rgba(255, 255, 255, 0.1);
-
-    color-scheme: dark;
-  }
-
+  /*
+    白底主题：dark / light 两套都走同一组浅色令牌。
+    这样即使老用户本地已持久化 theme=dark，界面同样是白底，
+    不需要手动去设置里切换。
+  */
+  :root[data-theme='dark'],
   :root[data-theme='light'] {
-    --bg-0: #eceef2;
-    --bg-1: #f3f4f7;
-    --bg-2: #f8f9fb;
+    --bg-0: #ffffff;
+    --bg-1: #fafbfc;
+    --bg-2: #f5f6f8;
 
-    --panel-bg: rgba(255, 255, 255, 0.62);
-    --panel-bg-strong: rgba(255, 255, 255, 0.86);
-    --panel-border: rgba(255, 255, 255, 0.92);
-    --panel-solid: #f7f8fa;
-    --panel-shadow: 0 8px 24px rgba(16, 24, 40, 0.09);
+    --panel-bg: rgba(255, 255, 255, 0.96);
+    --panel-bg-strong: #ffffff;
+    --panel-border: rgba(17, 24, 39, 0.08);
+    --panel-solid: #ffffff;
+    --panel-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
 
-    --text-1: #14161a;
-    --text-2: rgba(20, 22, 26, 0.66);
-    --text-3: rgba(20, 22, 26, 0.46);
+    --text-1: #1f2329;
+    --text-2: rgba(31, 35, 41, 0.68);
+    --text-3: rgba(31, 35, 41, 0.45);
 
-    --cover-scrim: rgba(246, 249, 255, 0.78);
-    --hairline: rgba(11, 17, 32, 0.08);
-    --hover-bg: rgba(11, 17, 32, 0.05);
-    --active-bg: rgba(11, 17, 32, 0.08);
+    --cover-scrim: rgba(255, 255, 255, 0.82);
+    --hairline: rgba(17, 24, 39, 0.09);
+    --hover-bg: rgba(17, 24, 39, 0.05);
+    --active-bg: rgba(17, 24, 39, 0.08);
 
     color-scheme: light;
   }
@@ -77,19 +60,14 @@
     正文对比度会掉到 3:1 以下，所以这种模式下把面板底换成更实的一档：
     照片还看得见（保留玻璃感），但字一定读得清。
   */
-  :root[data-photo='1'][data-theme='dark'] {
-    --panel-bg: rgba(14, 16, 21, 0.62);
-    --panel-bg-strong: rgba(18, 20, 26, 0.82);
-    --panel-border: rgba(255, 255, 255, 0.12);
-    --panel-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-    --hover-bg: rgba(255, 255, 255, 0.07);
-    --active-bg: rgba(255, 255, 255, 0.11);
-  }
-
+  :root[data-photo='1'][data-theme='dark'],
   :root[data-photo='1'][data-theme='light'] {
-    --panel-bg: rgba(255, 255, 255, 0.8);
-    --panel-bg-strong: rgba(255, 255, 255, 0.93);
+    --panel-bg: rgba(255, 255, 255, 0.9);
+    --panel-bg-strong: rgba(255, 255, 255, 0.97);
     --panel-border: rgba(255, 255, 255, 0.95);
+    --panel-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+    --hover-bg: rgba(17, 24, 39, 0.05);
+    --active-bg: rgba(17, 24, 39, 0.08);
   }
 
   * {
@@ -102,8 +80,10 @@
     height: 100%;
   }
 
-  html {
-    background: var(--bg-0);
+  /* 透明窗口：圆角外要透出桌面，背景色交给 App 根容器（带圆角）来铺 */
+  html,
+  body {
+    background: transparent;
   }
 
   body {
@@ -267,6 +247,13 @@
 }
 
 @layer utilities {
+  /* 应用外框：白底 + 圆角，透明窗口下圆角外露出桌面 */
+  .app-frame {
+    background: var(--bg-0);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
   .drag {
     -webkit-app-region: drag;
   }

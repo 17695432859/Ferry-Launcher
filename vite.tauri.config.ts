@@ -28,7 +28,8 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: resolve('out/tauri'),
-    emptyOutDir: true,
+    // 不在这里清空：沙箱会对 rmSync 走 trash 且超时。由 build-tauri.mjs 用 fs 直接删。
+    emptyOutDir: false,
     target: 'chrome105',
     rollupOptions: { input: { index: resolve('src/renderer/index.html') } }
   }

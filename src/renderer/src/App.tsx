@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { MotionConfig } from 'framer-motion'
-import { Backdrop } from '@renderer/components/Backdrop'
 import { Sidebar } from '@renderer/components/Sidebar'
 import { TitleBar } from '@renderer/components/TitleBar'
 import { Toast } from '@renderer/components/Toast'
@@ -30,8 +29,7 @@ function usePrefersDark(): boolean {
 
 function Splash(): JSX.Element {
   return (
-    <div className="relative flex h-full items-center justify-center">
-      <div className="app-backdrop" />
+    <div className="app-frame relative flex h-full items-center justify-center">
       <div className="relative z-10 flex flex-col items-center gap-3">
         <div className="animate-pulse">
           <FerryLogo size={44} />
@@ -62,32 +60,13 @@ export function App(): JSX.Element {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="relative flex h-full flex-col">
-        {settings.backgroundMode === 'custom' && backgroundImage ? (
-          <>
-            <div
-              className="fixed inset-0 z-0 bg-cover bg-center"
-              style={{ backgroundImage: `url("${backgroundImage}")` }}
-              aria-hidden="true"
-            />
-            {/*
-              自定义背景是照片，亮度不可控。这里压一层固定底噪（纯色，不是渐变），
-              再叠加用户自己调的压暗比例——否则 8% 白的玻璃面板压在亮天空上，正文对比度会掉到 3:1 以下。
-            */}
-            <div
-              className="fixed inset-0 z-0"
-              style={{
-                backgroundColor: 'var(--bg-0)',
-                opacity: Math.min(0.9, 0.15 + (settings.backgroundDim / 100) * 0.75)
-              }}
-              aria-hidden="true"
-            />
-          </>
-        ) : (
-          <>
-            <div className="app-backdrop" />
-            <Backdrop animated={settings.backgroundAnimation} />
-          </>
+      <div className="app-frame relative flex h-full flex-col">
+        {settings.backgroundMode === 'custom' && backgroundImage && (
+          <div
+            className="absolute inset-0 z-0 bg-cover bg-center"
+            style={{ backgroundImage: `url("${backgroundImage}")` }}
+            aria-hidden="true"
+          />
         )}
         <TitleBar />
         <div className="relative z-10 flex min-h-0 flex-1">

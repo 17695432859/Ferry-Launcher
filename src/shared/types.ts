@@ -130,7 +130,7 @@ export type ScanWarning =
   | { code: 'mods-without-version' }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'dark',
+  theme: 'light',
   accent: '#4c6fff',
   blur: 24,
   backgroundAnimation: true,

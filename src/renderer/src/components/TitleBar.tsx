@@ -38,10 +38,10 @@ export function TitleBar(): JSX.Element {
   return (
     <header
       data-tauri-drag-region="deep"
-      className="drag relative z-20 grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center bg-[#2d7dd2] px-3 text-white"
+      className="drag relative z-20 grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-[var(--hairline)] bg-white px-3 text-[var(--sidebar-text)]"
     >
       <div className="flex items-center gap-2">
-        <span className="select-none text-[15px] font-bold tracking-tight">Ferry</span>
+        <span className="select-none text-[15px] font-bold tracking-tight accent-text">Ferry</span>
       </div>
 
       <nav className="flex items-center gap-1">
@@ -54,12 +54,12 @@ export function TitleBar(): JSX.Element {
               [
                 'no-drag flex h-[26px] items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-colors duration-150',
                 isActive
-                  ? 'bg-white text-[#2d7dd2] shadow-sm'
-                  : 'text-white/90 hover:bg-white/15 hover:text-white'
+                  ? 'bg-accent/12 accent-text'
+                  : 'text-[var(--sidebar-text-2)] hover:bg-[var(--hover-bg)] hover:text-[var(--sidebar-text)]'
               ].join(' ')
             }
           >
-            <Icon name={tab.icon} size={13} filled={tab.to === '/'} strokeWidth={tab.to === '/' ? 0 : 1.7} />
+            <Icon name={tab.icon} size={13} />
             <span>{t(tab.labelKey)}</span>
           </NavLink>
         ))}
@@ -71,8 +71,8 @@ export function TitleBar(): JSX.Element {
             className={[
               'no-drag flex h-[26px] items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-colors duration-150',
               moreActive || moreOpen
-                ? 'bg-white text-[#2d7dd2] shadow-sm'
-                : 'text-white/90 hover:bg-white/15 hover:text-white'
+                ? 'bg-accent/12 accent-text'
+                : 'text-[var(--sidebar-text-2)] hover:bg-[var(--hover-bg)] hover:text-[var(--sidebar-text)]'
             ].join(' ')}
           >
             <Icon name="grid" size={13} />
@@ -113,7 +113,7 @@ export function TitleBar(): JSX.Element {
           aria-label={t('titlebar.minimize')}
           title={t('titlebar.minimize')}
           onClick={() => void window.ferry.window.minimize()}
-          className="no-drag flex h-8 w-11 items-center justify-center rounded-lg text-white/90 transition-colors hover:bg-white/15 hover:text-white"
+          className="no-drag flex h-8 w-11 items-center justify-center rounded-lg text-[var(--sidebar-text-2)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--sidebar-text)]"
         >
           <Icon name="minimize" size={16} />
         </button>
@@ -122,7 +122,7 @@ export function TitleBar(): JSX.Element {
           aria-label={t('titlebar.close')}
           title={t('titlebar.close')}
           onClick={() => void window.ferry.window.close()}
-          className="no-drag flex h-8 w-11 items-center justify-center rounded-lg text-white/90 transition-colors hover:bg-[#e81123] hover:text-white"
+          className="no-drag flex h-8 w-11 items-center justify-center rounded-lg text-[var(--sidebar-text-2)] transition-colors hover:bg-[#e81123] hover:text-white"
         >
           <Icon name="close" size={16} />
         </button>
