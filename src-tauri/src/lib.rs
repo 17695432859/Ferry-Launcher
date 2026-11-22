@@ -400,7 +400,7 @@ fn content_import(
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn content_updates(state: State<'_, AppState>, id: String) -> Vec<content::ModUpdate> {
     let Some(instance) = store::find_instance(&state, &id) else {
         return Vec::new();
@@ -869,7 +869,7 @@ fn accounts_offline(name: String) -> Result<auth::AccountSummary, String> {
     auth::add_offline(&name)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn accounts_login_littleskin(
     api_root: String,
     username: String,
@@ -883,7 +883,7 @@ fn accounts_login_littleskin(
     auth::yggdrasil_login(root, &username, &password)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn accounts_refresh(id: String) -> Result<auth::AccountSummary, String> {
     auth::yggdrasil_refresh(&id)
 }
@@ -916,12 +916,12 @@ fn accounts_upload_skin(
     auth::upload_skin(&id, bytes, &model)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn accounts_ms_start(client_id: Option<String>) -> Result<auth::DeviceCode, String> {
     auth::microsoft_device_code(client_id.as_deref().unwrap_or(""))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn accounts_ms_poll(client_id: Option<String>, device_code: String) -> serde_json::Value {
     match auth::microsoft_poll(client_id.as_deref().unwrap_or(""), &device_code) {
         Ok(Some(account)) => serde_json::json!({ "status": "ok", "account": account }),
@@ -939,12 +939,14 @@ pub struct InstallState {
     cancel: Mutex<Option<Arc<AtomicBool>>>,
 }
 
-#[tauri::command]
+/// 版本清单 / 加载器版本都要走网络（还是阻塞式 reqwest）。
+/// 不加 `async` 的话这段跑在主线程上，进下载页会先卡几秒——Windows 直接标「未响应」。
+#[tauri::command(async)]
 fn versions_manifest(source: String) -> Result<Vec<install::VersionSummary>, String> {
     install::manifest(&source)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn versions_loaders(
     mc_version: String,
     loader: String,
@@ -952,7 +954,7 @@ fn versions_loaders(
     install::loader_versions(&mc_version, &loader)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn install_start(
     app: AppHandle,
     state: State<'_, InstallState>,
@@ -986,7 +988,7 @@ fn install_cancel(state: State<'_, InstallState>) {
    启动
    ========================================================================== */
 
-#[tauri::command]
+#[tauri::command(async)]
 fn launch_start(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1154,7 +1156,7 @@ fn netplay_easytier_save(state: State<'_, NetplayState>, config: serde_json::Val
    ========================================================================== */
 
 /// 把远程图片转成 data URL：渲染层直接用会被 CORS 挡住（WebGL 上传纹理要求同源）
-#[tauri::command]
+#[tauri::command(async)]
 fn net_fetch_image(url: String) -> Option<String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return None;
